@@ -52,6 +52,56 @@ Two special files help the LLM (and you) navigate the wiki as it grows. They ser
 
 At some point you may want to build small tools that help the LLM operate on the wiki more efficiently. A search engine over the wiki pages is the most obvious one — at small scale the index file is enough, but as the wiki grows you want proper search. [qmd](https://github.com/tobi/qmd) is a good option: it's a local search engine for markdown files with hybrid BM25/vector search and LLM re-ranking, all on-device. It has both a CLI (so the LLM can shell out to it) and an MCP server (so the LLM can use it as a native tool). You could also build something simpler yourself — the LLM can help you vibe-code a naive search script as the need arises.
 
+## Concrete variant: graphify + LLM Wiki
+
+Graphify and the LLM Wiki pattern fit together cleanly if they own different
+layers:
+
+- **Source manager** owns add/edit/remove. It keeps a source registry and an
+  active source folder.
+- **Graphify** owns machine extraction. It scans the active source folder,
+  extracts entities and relationships, detects communities, and can generate
+  graph/wiki starter pages.
+- **The LLM Wiki** owns the curated human layer. The LLM turns graphify output
+  into stable advisor pages, founder-facing summaries, contradictions, source
+  citations, and decision-ready synthesis.
+
+For this repo, the concrete layout is:
+
+```text
+sources/
+  sources.json      # source registry
+  active/           # sources included in graphify refreshes
+  archive/          # removed sources
+  inbox/            # optional drop zone before registering sources
+  assets/           # downloaded images and attachments
+wiki/
+  index.md          # content-oriented catalog
+  log.md            # chronological append-only activity log
+graphify-out/       # generated graphify output
+tools/
+  wiki_sources.py   # add/edit/remove/list source CLI
+```
+
+The normal loop becomes:
+
+```bash
+python3 tools/wiki_sources.py add ./path/to/source.pdf --title "Marten talk notes" --advisor marten --tags marten,founder-sprint
+python3 tools/wiki_sources.py list
+graphify sources/active --update --wiki --obsidian --obsidian-dir wiki
+```
+
+When a source should no longer affect answers:
+
+```bash
+python3 tools/wiki_sources.py remove <source-id>
+graphify sources/active --update --wiki --obsidian --obsidian-dir wiki
+```
+
+This makes source operations explicit and reversible. Graphify never has to
+guess which files are currently trusted, and the wiki can cite stable source IDs
+instead of brittle filenames.
+
 ## Tips and tricks
 
 - **Obsidian Web Clipper** is a browser extension that converts web articles to markdown. Very useful for quickly getting sources into your raw collection.
