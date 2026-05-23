@@ -27,8 +27,10 @@ export async function PATCH(req: Request, { params }: Params) {
   }
   const parsed = UpdateBrainBodySchema.safeParse(raw);
   if (!parsed.success) return zodError(parsed.error as z.ZodError);
+  const currentBrain = await getAdvisorBrain(id);
   const brain = await updateAdvisorBrain(id, {
     ...parsed.data,
+    schema: parsed.data.schema ?? currentBrain?.schema ?? "",
     wikiPages: parsed.data.wikiPages.map((page) => ({
       ...page,
       updatedAt: page.updatedAt ?? Date.now(),

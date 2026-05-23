@@ -5,6 +5,9 @@ import {
   CODEX_MODEL_OPTIONS,
   CODEX_REASONING_OPTIONS,
   CODEX_TEXT_VERBOSITY_OPTIONS,
+  DEFAULT_APP_CHECKIN_SETTINGS,
+  MAX_CHECKIN_INTERVAL_DAYS,
+  MIN_CHECKIN_INTERVAL_DAYS,
 } from "@/lib/ai/model-settings";
 
 export type AppTab = "chat" | "advisor" | "checkins";
@@ -45,6 +48,7 @@ export interface AdvisorBrain {
   vision: string;
   direction: string;
   memory: string;
+  schema: string;
   wikiPages: BrainPage[];
   skills: BrainPage[];
 }
@@ -78,7 +82,7 @@ export interface CheckinItem {
 }
 
 export interface SearchHit {
-  source: "profile" | "vision" | "direction" | "memory" | "wiki" | "skill" | "source";
+  source: "profile" | "vision" | "direction" | "memory" | "schema" | "wiki" | "skill" | "source";
   slug: string;
   title: string;
   excerpt: string;
@@ -100,6 +104,15 @@ export interface AdvisorBrainResponse {
 
 export interface ListSourcesResponse {
   sources: AdvisorSource[];
+}
+
+export interface ListConversationsResponse {
+  conversations: Conversation[];
+}
+
+export interface ConversationResponse {
+  conversation: Conversation;
+  messages: AppUIMessage[];
 }
 
 export interface CheckinsResponse {
@@ -170,6 +183,15 @@ export const UpdateSettingsBodySchema = z.object({
     textVerbosity: z.enum(codexTextVerbosityIds),
     openAIApiKey: z.string().optional(),
   }),
+  checkins: z
+    .object({
+      intervalDays: z.coerce
+        .number()
+        .int()
+        .min(MIN_CHECKIN_INTERVAL_DAYS)
+        .max(MAX_CHECKIN_INTERVAL_DAYS),
+    })
+    .default(DEFAULT_APP_CHECKIN_SETTINGS),
 });
 
 export const UpsertSourceBodySchema = z.object({
@@ -186,6 +208,7 @@ export const UpdateBrainBodySchema = z.object({
   vision: z.string(),
   direction: z.string(),
   memory: z.string(),
+  schema: z.string().optional(),
   wikiPages: z.array(
     z.object({
       slug: z.string().min(1).max(100),

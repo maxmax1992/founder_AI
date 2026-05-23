@@ -19,6 +19,7 @@ import {
   Plus,
   Save,
   Send,
+  Settings,
   Sparkles,
   Trash2,
   Upload,
@@ -33,12 +34,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  type AppCheckinSettings,
   type AppModelSettings,
   type AppSettings,
   CODEX_MODEL_OPTIONS,
   CODEX_REASONING_OPTIONS,
   CODEX_TEXT_VERBOSITY_OPTIONS,
   DEFAULT_APP_MODEL_SETTINGS,
+  DEFAULT_APP_SETTINGS,
 } from "@/lib/ai/model-settings";
 import { slugify } from "@/lib/slug";
 import type {
@@ -51,7 +54,10 @@ import type {
   BrainPage,
   CheckinItem,
   CheckinsResponse,
+  Conversation,
+  ConversationResponse,
   ListAdvisorsResponse,
+  ListConversationsResponse,
   ListSourcesResponse,
   SettingsResponse,
 } from "@/lib/types";
@@ -68,6 +74,11 @@ const tabs: Array<{
 ];
 
 type SourceKind = NonNullable<AdvisorSource["kind"]>;
+type AdvisorWorkspaceTab = "llm" | "wiki" | "skills" | "sources" | "workshop";
+type LlmWikiLayer = "sources" | "wiki" | "schema";
+type BrainSaveState = "idle" | "pending" | "saving" | "saved" | "error";
+
+const BRAIN_AUTOSAVE_DELAY_MS = 800;
 
 const sourceKindOptions: Array<{
   id: SourceKind | "docx";
@@ -163,6 +174,25 @@ function briefExcerpt(value: string, max = 360) {
   return clean.length > max ? `${clean.slice(0, max - 1)}...` : clean;
 }
 
+function shortRelativeTime(timestamp: number, now = Date.now()) {
+  const diff = Math.max(0, now - timestamp);
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  const week = 7 * day;
+
+  if (diff < minute) return "now";
+  if (diff < day) return `${Math.max(1, Math.floor(diff / hour))}h`;
+  if (diff < week) return `${Math.max(1, Math.floor(diff / day))}d`;
+  return `${Math.max(1, Math.floor(diff / week))}w`;
+}
+
+function messageCreatedAt(message: AppUIMessage) {
+  if (!message.metadata || typeof message.metadata !== "object") return Date.now();
+  const value = (message.metadata as { createdAt?: unknown }).createdAt;
+  return typeof value === "number" && Number.isFinite(value) ? value : Date.now();
+}
+
 function advisorSkillMarkdown(title: string, brief: string, contextSources: AdvisorSource[]) {
   const sourceNotes = contextSources
     .slice(0, 5)
@@ -196,8 +226,12 @@ export function SprintBuddyShell() {
   const [activeTab, setActiveTab] = React.useState<AppTab>("chat");
   const [advisors, setAdvisors] = React.useState<Advisor[]>([]);
   const [advisorId, setAdvisorId] = React.useState<string>("");
+  const [conversations, setConversations] = React.useState<Conversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = React.useState(() => generateId());
+  const [conversationMessages, setConversationMessages] = React.useState<AppUIMessage[]>([]);
   const [settings, setSettings] = React.useState<AppSettings | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [conversationError, setConversationError] = React.useState<string | null>(null);
 
   const loadShellData = React.useCallback(async () => {
     try {
@@ -221,10 +255,82 @@ export function SprintBuddyShell() {
     return () => window.clearTimeout(handle);
   }, [loadShellData]);
 
+  const loadConversations = React.useCallback(async (targetAdvisorId: string) => {
+    if (!targetAdvisorId) {
+      setConversations([]);
+      return;
+    }
+    try {
+      const data = await jsonFetch<ListConversationsResponse>(
+        `/api/conversations?advisorId=${encodeURIComponent(targetAdvisorId)}`,
+      );
+      setConversations(data.conversations);
+      setConversationError(null);
+    } catch (err) {
+      setConversationError(err instanceof Error ? err.message : "Failed to load conversations");
+    }
+  }, []);
+
+  const resetConversation = React.useCallback(() => {
+    setActiveConversationId(generateId());
+    setConversationMessages([]);
+    window.history.replaceState(null, "", "/");
+  }, []);
+
+  const selectAdvisor = React.useCallback(
+    (nextAdvisorId: string) => {
+      setAdvisorId(nextAdvisorId);
+      resetConversation();
+    },
+    [resetConversation],
+  );
+
+  React.useEffect(() => {
+    void loadConversations(advisorId);
+  }, [advisorId, loadConversations]);
+
+  const openConversation = React.useCallback(
+    async (conversationId: string, scopedAdvisorId = advisorId) => {
+      try {
+        const advisorQuery = scopedAdvisorId
+          ? `?advisorId=${encodeURIComponent(scopedAdvisorId)}`
+          : "";
+        const data = await jsonFetch<ConversationResponse>(
+          `/api/conversations/${encodeURIComponent(conversationId)}${advisorQuery}`,
+        );
+        if (data.conversation.advisorId !== advisorId) {
+          setAdvisorId(data.conversation.advisorId);
+        }
+        setActiveConversationId(data.conversation.id);
+        setConversationMessages(data.messages);
+        setActiveTab("chat");
+        window.history.replaceState(
+          null,
+          "",
+          `/?conversation=${encodeURIComponent(conversationId)}`,
+        );
+        setConversationError(null);
+      } catch (err) {
+        setConversationError(err instanceof Error ? err.message : "Failed to open conversation");
+      }
+    },
+    [advisorId],
+  );
+
+  const didOpenUrlConversation = React.useRef(false);
+
+  React.useEffect(() => {
+    if (didOpenUrlConversation.current || advisors.length === 0) return;
+    const conversationId = new URL(window.location.href).searchParams.get("conversation");
+    if (!conversationId) return;
+    didOpenUrlConversation.current = true;
+    void openConversation(conversationId, "");
+  }, [advisors.length, openConversation]);
+
   const updateModelSettings = React.useCallback(
     async (patch: Partial<AppModelSettings>) => {
-      const current = settings?.model ?? DEFAULT_APP_MODEL_SETTINGS;
-      const next: AppSettings = { model: { ...current, ...patch } };
+      const current = settings ?? DEFAULT_APP_SETTINGS;
+      const next: AppSettings = { ...current, model: { ...current.model, ...patch } };
       setSettings(next);
       try {
         const data = await jsonFetch<SettingsResponse>("/api/settings", {
@@ -238,7 +344,27 @@ export function SprintBuddyShell() {
         void loadShellData();
       }
     },
-    [loadShellData, settings?.model],
+    [loadShellData, settings],
+  );
+
+  const updateCheckinSettings = React.useCallback(
+    async (patch: Partial<AppCheckinSettings>) => {
+      const current = settings ?? DEFAULT_APP_SETTINGS;
+      const next: AppSettings = { ...current, checkins: { ...current.checkins, ...patch } };
+      setSettings(next);
+      try {
+        const data = await jsonFetch<SettingsResponse>("/api/settings", {
+          method: "PATCH",
+          body: JSON.stringify(next),
+        });
+        setSettings(data.settings);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to save check-in settings");
+        void loadShellData();
+      }
+    },
+    [loadShellData, settings],
   );
 
   const selectedAdvisor = advisors.find((advisor) => advisor.id === advisorId) ?? null;
@@ -253,9 +379,17 @@ export function SprintBuddyShell() {
           activeTab={activeTab}
           advisors={advisors}
           advisorId={advisorId}
+          activeConversationId={activeConversationId}
+          conversations={conversations}
           settings={settings}
-          onAdvisorChange={setAdvisorId}
+          onAdvisorChange={selectAdvisor}
+          onCheckinSettingsChange={(patch) => void updateCheckinSettings(patch)}
+          onConversationSelect={(conversationId) => void openConversation(conversationId)}
           onModelSettingsChange={(patch) => void updateModelSettings(patch)}
+          onNewConversation={() => {
+            resetConversation();
+            setActiveTab("chat");
+          }}
           onTabChange={setActiveTab}
         />
       </aside>
@@ -266,7 +400,8 @@ export function SprintBuddyShell() {
           advisors={advisors}
           advisorId={advisorId}
           settings={settings}
-          onAdvisorChange={setAdvisorId}
+          onAdvisorChange={selectAdvisor}
+          onCheckinSettingsChange={(patch) => void updateCheckinSettings(patch)}
           onModelSettingsChange={(patch) => void updateModelSettings(patch)}
           onTabChange={setActiveTab}
         />
@@ -306,28 +441,34 @@ export function SprintBuddyShell() {
           )}
         </div>
 
-        {error && (
+        {(error || conversationError) && (
           <div className="border-b border-destructive/20 bg-destructive/10 px-4 py-2 text-sm text-destructive">
-            {error}
+            {error || conversationError}
           </div>
         )}
 
         <div className="min-h-0 flex-1 flex flex-col">
           {activeTab === "chat" && (
-            <BuddyChat key={selectedAdvisor?.id ?? "none"} advisor={selectedAdvisor} />
+            <BuddyChat
+              key={`${selectedAdvisor?.id ?? "none"}-${activeConversationId}`}
+              advisor={selectedAdvisor}
+              conversationId={activeConversationId}
+              initialMessages={conversationMessages}
+              onConversationUpdated={() => void loadConversations(advisorId)}
+            />
           )}
           {activeTab === "advisor" && (
             <AdvisorEditor
               advisors={advisors}
               advisor={selectedAdvisor}
-              onAdvisorSelected={setAdvisorId}
+              onAdvisorSelected={selectAdvisor}
               onAdvisorCreated={async (advisor) => {
                 await loadShellData();
-                setAdvisorId(advisor.id);
+                selectAdvisor(advisor.id);
               }}
               onAdvisorDeleted={async () => {
                 await loadShellData();
-                setAdvisorId("");
+                selectAdvisor("");
               }}
               onAdvisorUpdated={loadShellData}
             />
@@ -343,19 +484,33 @@ function Sidebar({
   activeTab,
   advisors,
   advisorId,
+  activeConversationId,
+  conversations,
   settings,
   onAdvisorChange,
+  onCheckinSettingsChange,
+  onConversationSelect,
   onModelSettingsChange,
+  onNewConversation,
   onTabChange,
 }: {
   activeTab: AppTab;
   advisors: Advisor[];
   advisorId: string;
+  activeConversationId: string;
+  conversations: Conversation[];
   settings: AppSettings | null;
   onAdvisorChange: (id: string) => void;
+  onCheckinSettingsChange: (patch: Partial<AppCheckinSettings>) => void;
+  onConversationSelect: (id: string) => void;
   onModelSettingsChange: (patch: Partial<AppModelSettings>) => void;
+  onNewConversation: () => void;
   onTabChange: (tab: AppTab) => void;
 }) {
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+  const currentSettings = settings ?? DEFAULT_APP_SETTINGS;
+  const relativeTimeNow = Date.now();
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-[10px] px-5 py-5 pb-[18px]">
@@ -418,13 +573,77 @@ function Sidebar({
             );
           })}
         </nav>
+        <button
+          type="button"
+          onClick={() => setIsSettingsOpen(true)}
+          className="group mt-2 flex w-full items-center gap-3 rounded-[6px] px-[10px] py-[10px] pb-[11px] text-left transition-colors hover:bg-bg-2"
+        >
+          <Settings className="size-4 text-fg-3 group-hover:text-foreground" />
+          <span className="text-[13px] leading-[1.4] text-foreground font-sans font-medium">
+            Settings
+          </span>
+          <span className="ml-auto font-mono text-[10px] text-fg-4">
+            {currentSettings.checkins.intervalDays}d
+          </span>
+        </button>
       </div>
 
       <hr className="mx-0 my-0 mb-[6px] border-0 border-t border-line-soft mt-2" />
 
-      <div className="flex-1 overflow-y-auto scrollbar-thin px-[10px] py-[4px]">
-        <ModelSettingsControls settings={settings} onChange={onModelSettingsChange} />
-      </div>
+      <section className="flex min-h-0 flex-1 flex-col px-[10px] pb-3">
+        <div className="flex items-center justify-between px-[10px] py-[14px] pb-[10px]">
+          <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-fg-4">
+            Chats
+          </span>
+          <button
+            type="button"
+            onClick={onNewConversation}
+            className="grid size-6 place-items-center rounded-[6px] text-fg-3 transition-colors hover:bg-bg-2 hover:text-foreground"
+            title="New chat"
+          >
+            <Plus className="size-3.5" />
+            <span className="sr-only">New chat</span>
+          </button>
+        </div>
+        <div className="scrollbar-thin scrollbar-thumb-line scrollbar-track-transparent min-h-0 flex-1 overflow-y-auto pr-1">
+          <div className="grid gap-1">
+            {conversations.map((conversation) => (
+              <a
+                key={conversation.id}
+                href={`/?conversation=${encodeURIComponent(conversation.id)}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  onConversationSelect(conversation.id);
+                }}
+                className={cn(
+                  "grid w-full grid-cols-[minmax(0,1fr)_32px] items-center gap-2 rounded-[6px] px-[10px] py-[8px] text-left transition-colors hover:bg-bg-2",
+                  activeTab === "chat" && activeConversationId === conversation.id && "bg-panel",
+                )}
+              >
+                <span className="truncate text-[13px] leading-[1.35] text-foreground">
+                  {conversation.title}
+                </span>
+                <span className="text-right font-mono text-[11px] text-fg-4">
+                  {shortRelativeTime(conversation.updatedAt, relativeTimeNow)}
+                </span>
+              </a>
+            ))}
+            {conversations.length === 0 && (
+              <div className="px-[10px] py-2 text-[12px] leading-[1.4] text-fg-4">
+                No past chats yet.
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <SettingsDialog
+        open={isSettingsOpen}
+        settings={settings}
+        onClose={() => setIsSettingsOpen(false)}
+        onCheckinSettingsChange={onCheckinSettingsChange}
+        onModelSettingsChange={onModelSettingsChange}
+      />
 
       <div className="mt-auto flex items-center gap-[10px] border-t border-line-soft px-5 py-[14px]">
         <div className="grid h-7 w-7 place-items-center rounded-full bg-[oklch(0.55_0.06_50)] font-sans text-[12px] font-medium text-[oklch(0.98_0.01_80)]">
@@ -445,9 +664,13 @@ function MobileBar(props: {
   advisorId: string;
   settings: AppSettings | null;
   onAdvisorChange: (id: string) => void;
+  onCheckinSettingsChange: (patch: Partial<AppCheckinSettings>) => void;
   onModelSettingsChange: (patch: Partial<AppModelSettings>) => void;
   onTabChange: (tab: AppTab) => void;
 }) {
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+  const currentSettings = props.settings ?? DEFAULT_APP_SETTINGS;
+
   return (
     <div className="border-border bg-background flex flex-col gap-2 border-b p-3 md:hidden">
       <select
@@ -473,128 +696,227 @@ function MobileBar(props: {
           </Button>
         ))}
       </div>
-      <ModelSettingsControls
+      <Button type="button" variant="outline" size="sm" onClick={() => setIsSettingsOpen(true)}>
+        <Settings className="size-4" />
+        Settings
+        <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+          {currentSettings.checkins.intervalDays}d
+        </span>
+      </Button>
+      <SettingsDialog
+        open={isSettingsOpen}
         settings={props.settings}
-        onChange={props.onModelSettingsChange}
-        compact
+        onClose={() => setIsSettingsOpen(false)}
+        onCheckinSettingsChange={props.onCheckinSettingsChange}
+        onModelSettingsChange={props.onModelSettingsChange}
       />
     </div>
+  );
+}
+
+function SettingsDialog({
+  open,
+  settings,
+  onClose,
+  onCheckinSettingsChange,
+  onModelSettingsChange,
+}: {
+  open: boolean;
+  settings: AppSettings | null;
+  onClose: () => void;
+  onCheckinSettingsChange: (patch: Partial<AppCheckinSettings>) => void;
+  onModelSettingsChange: (patch: Partial<AppModelSettings>) => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-black/20 p-4 pt-14">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        className="border-border bg-background w-full max-w-[760px] rounded-lg border shadow-xl"
+      >
+        <div className="border-border flex items-center justify-between gap-3 border-b px-4 py-3">
+          <div>
+            <h2 id="settings-title" className="text-base font-semibold">
+              Settings
+            </h2>
+            <p className="text-muted-foreground text-xs">Sprint Buddy</p>
+          </div>
+          <Button type="button" variant="ghost" size="icon" onClick={onClose}>
+            <X className="size-4" />
+            <span className="sr-only">Close settings</span>
+          </Button>
+        </div>
+        <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <ModelSettingsControls settings={settings} onChange={onModelSettingsChange} />
+          <CheckinSettingsControls settings={settings} onChange={onCheckinSettingsChange} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CheckinSettingsControls({
+  settings,
+  onChange,
+}: {
+  settings: AppSettings | null;
+  onChange: (patch: Partial<AppCheckinSettings>) => void;
+}) {
+  const checkinSettings = settings?.checkins ?? DEFAULT_APP_SETTINGS.checkins;
+
+  return (
+    <section className="border-border bg-background rounded-md border p-3">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+          Daily check-ins
+        </p>
+        <span className="text-muted-foreground font-mono text-xs">
+          {checkinSettings.intervalDays}d
+        </span>
+      </div>
+      <label
+        htmlFor="checkin-frequency-days"
+        className="text-muted-foreground mb-1 block text-xs font-medium tracking-wider uppercase"
+      >
+        Frequency
+      </label>
+      <div className="grid grid-cols-[minmax(0,1fr)_48px] items-center gap-2">
+        <Input
+          id="checkin-frequency-days"
+          type="number"
+          min={1}
+          max={30}
+          step={1}
+          value={checkinSettings.intervalDays}
+          disabled={!settings}
+          onChange={(event) => {
+            const intervalDays = Number(event.target.value);
+            if (!Number.isFinite(intervalDays)) return;
+            onChange({ intervalDays });
+          }}
+          className="h-9"
+        />
+        <span className="text-muted-foreground text-sm">days</span>
+      </div>
+    </section>
   );
 }
 
 function ModelSettingsControls({
   settings,
   onChange,
-  compact = false,
 }: {
   settings: AppSettings | null;
   onChange: (patch: Partial<AppModelSettings>) => void;
-  compact?: boolean;
 }) {
   const modelSettings = settings?.model ?? DEFAULT_APP_MODEL_SETTINGS;
   const selectedModel = CODEX_MODEL_OPTIONS.find((option) => option.id === modelSettings.model);
 
   return (
-    <section className={cn("px-3 pb-3", compact && "px-0 pb-0")}>
-      <div className={cn("border-border bg-background rounded-md border p-3", compact && "p-2")}>
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-            Model
-          </p>
-          <span className="text-muted-foreground truncate text-xs">
-            {selectedModel?.detail ?? "Baseline"}
-          </span>
+    <section className="border-border bg-background rounded-md border p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-muted-foreground text-xs font-medium tracking-wider uppercase">Model</p>
+        <span className="text-muted-foreground truncate text-xs">
+          {selectedModel?.detail ?? "Baseline"}
+        </span>
+      </div>
+      <select
+        aria-label="Model"
+        value={modelSettings.model}
+        disabled={!settings}
+        onChange={(event) => onChange({ model: event.target.value as AppModelSettings["model"] })}
+        className="border-border bg-background text-foreground focus-visible:ring-ring/50 h-9 w-full rounded-md border px-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-60"
+      >
+        {CODEX_MODEL_OPTIONS.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+
+      <div className="mt-3">
+        <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wider uppercase">
+          Thinking
+        </p>
+        <div className="border-border grid grid-cols-4 overflow-hidden rounded-md border">
+          {CODEX_REASONING_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              disabled={!settings}
+              onClick={() => onChange({ reasoningEffort: option.id })}
+              className={cn(
+                "hover:bg-muted h-8 border-r px-1 text-xs transition-colors last:border-r-0 disabled:opacity-60",
+                modelSettings.reasoningEffort === option.id &&
+                  "bg-brand-muted text-brand-muted-foreground font-medium",
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
-        <select
-          aria-label="Model"
-          value={modelSettings.model}
-          disabled={!settings}
-          onChange={(event) => onChange({ model: event.target.value as AppModelSettings["model"] })}
-          className="border-border bg-background text-foreground focus-visible:ring-ring/50 h-9 w-full rounded-md border px-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-60"
+      </div>
+
+      <div className="mt-3">
+        <label
+          htmlFor="api-key-input"
+          className="text-muted-foreground mb-1 block text-xs font-medium tracking-wider uppercase"
         >
-          {CODEX_MODEL_OPTIONS.map((option) => (
+          OpenAI Key
+        </label>
+        <Input
+          id="api-key-input"
+          type="password"
+          autoComplete="off"
+          value={modelSettings.openAIApiKey ?? ""}
+          disabled={!settings}
+          onChange={(event) => onChange({ openAIApiKey: event.target.value })}
+          placeholder="sk-..."
+          className="h-8 text-xs"
+        />
+      </div>
+
+      <div className="mt-3">
+        <label
+          htmlFor="verbosity-select"
+          className="text-muted-foreground mb-1 block text-xs font-medium tracking-wider uppercase"
+        >
+          Output
+        </label>
+        <select
+          id="verbosity-select"
+          value={modelSettings.textVerbosity}
+          disabled={!settings}
+          onChange={(event) =>
+            onChange({ textVerbosity: event.target.value as AppModelSettings["textVerbosity"] })
+          }
+          className="border-border bg-background text-foreground focus-visible:ring-ring/50 h-8 w-full rounded-md border px-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-60"
+        >
+          {CODEX_TEXT_VERBOSITY_OPTIONS.map((option) => (
             <option key={option.id} value={option.id}>
               {option.label}
             </option>
           ))}
         </select>
-
-        <div className="mt-3">
-          <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wider uppercase">
-            Thinking
-          </p>
-          <div className="border-border grid grid-cols-4 overflow-hidden rounded-md border">
-            {CODEX_REASONING_OPTIONS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                disabled={!settings}
-                onClick={() => onChange({ reasoningEffort: option.id })}
-                className={cn(
-                  "hover:bg-muted h-8 border-r px-1 text-xs transition-colors last:border-r-0 disabled:opacity-60",
-                  modelSettings.reasoningEffort === option.id &&
-                    "bg-brand-muted text-brand-muted-foreground font-medium",
-                )}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {!compact && (
-          <div className="mt-3">
-            <label
-              htmlFor="api-key-input"
-              className="text-muted-foreground mb-1 block text-xs font-medium tracking-wider uppercase"
-            >
-              OpenAI Key
-            </label>
-            <Input
-              id="api-key-input"
-              type="password"
-              autoComplete="off"
-              value={modelSettings.openAIApiKey ?? ""}
-              disabled={!settings}
-              onChange={(event) => onChange({ openAIApiKey: event.target.value })}
-              placeholder="sk-..."
-              className="h-8 text-xs"
-            />
-          </div>
-        )}
-
-        {!compact && (
-          <div className="mt-3">
-            <label
-              htmlFor="verbosity-select"
-              className="text-muted-foreground mb-1 block text-xs font-medium tracking-wider uppercase"
-            >
-              Output
-            </label>
-            <select
-              id="verbosity-select"
-              value={modelSettings.textVerbosity}
-              disabled={!settings}
-              onChange={(event) =>
-                onChange({ textVerbosity: event.target.value as AppModelSettings["textVerbosity"] })
-              }
-              className="border-border bg-background text-foreground focus-visible:ring-ring/50 h-8 w-full rounded-md border px-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-60"
-            >
-              {CODEX_TEXT_VERBOSITY_OPTIONS.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
     </section>
   );
 }
 
-function BuddyChat({ advisor }: { advisor: Advisor | null }) {
-  const [chatId] = React.useState(() => generateId());
+function BuddyChat({
+  advisor,
+  conversationId,
+  initialMessages,
+  onConversationUpdated,
+}: {
+  advisor: Advisor | null;
+  conversationId: string;
+  initialMessages: AppUIMessage[];
+  onConversationUpdated: () => void;
+}) {
   const transport = React.useMemo(
     () =>
       new DefaultChatTransport<AppUIMessage>({
@@ -604,12 +926,19 @@ function BuddyChat({ advisor }: { advisor: Advisor | null }) {
     [advisor?.id],
   );
 
-  const { messages, sendMessage, status, error, regenerate, clearError } = useChat<AppUIMessage>({
-    id: chatId,
-    transport,
-  });
+  const { messages, setMessages, sendMessage, status, error, regenerate, clearError } =
+    useChat<AppUIMessage>({
+      id: conversationId,
+      messages: initialMessages,
+      transport,
+      onFinish: onConversationUpdated,
+    });
   const [input, setInput] = React.useState("");
   const isBusy = status === "submitted" || status === "streaming";
+
+  React.useEffect(() => {
+    setMessages(initialMessages);
+  }, [initialMessages, setMessages]);
 
   const submit = (text = input) => {
     const trimmed = text.trim();
@@ -925,7 +1254,7 @@ function MessageList({ messages, advisor }: { messages: AppUIMessage[]; advisor:
               </span>
               <span>·</span>
               <span>
-                {new Date().toLocaleTimeString([], {
+                {new Date(messageCreatedAt(message)).toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
                   hour12: false,
@@ -1231,14 +1560,29 @@ function AdvisorWorkspace({
   const [sources, setSources] = React.useState<AdvisorSource[]>([]);
   const [selectedSourceId, setSelectedSourceId] = React.useState("");
   const [status, setStatus] = React.useState("");
+  const [brainSaveState, setBrainSaveState] = React.useState<BrainSaveState>("idle");
   const [isSkillCreatorOpen, setIsSkillCreatorOpen] = React.useState(false);
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = React.useState<AdvisorWorkspaceTab>("llm");
+  const lastSavedBrainRef = React.useRef("");
+  const latestBrainRef = React.useRef<AdvisorBrain | null>(null);
+  const latestBrainSerializedRef = React.useRef("");
+  const pendingBrainSaveRef = React.useRef<{
+    brain: AdvisorBrain;
+    serialized: string;
+  } | null>(null);
+  const isBrainSaveInFlightRef = React.useRef(false);
 
   const load = React.useCallback(async () => {
     const [brainData, sourceData] = await Promise.all([
       jsonFetch<AdvisorBrainResponse>(`/api/advisors/${advisor.id}/brain`),
       jsonFetch<ListSourcesResponse>(`/api/advisors/${advisor.id}/sources`),
     ]);
+    const serializedBrain = JSON.stringify(brainData.brain);
+    lastSavedBrainRef.current = serializedBrain;
+    latestBrainRef.current = brainData.brain;
+    latestBrainSerializedRef.current = serializedBrain;
     setBrain(brainData.brain);
+    setBrainSaveState("idle");
     setSources(sourceData.sources);
     setSelectedSourceId((current) => current || sourceData.sources[0]?.id || "");
   }, [advisor.id]);
@@ -1261,14 +1605,80 @@ function AdvisorWorkspace({
     await onAdvisorUpdated();
   };
 
+  const saveBrainSnapshot = React.useCallback(
+    async (
+      brainSnapshot: AdvisorBrain,
+      serialized: string,
+      options: { automatic: boolean },
+    ): Promise<void> => {
+      if (isBrainSaveInFlightRef.current) {
+        pendingBrainSaveRef.current = { brain: brainSnapshot, serialized };
+        setBrainSaveState("pending");
+        return;
+      }
+
+      isBrainSaveInFlightRef.current = true;
+      setBrainSaveState("saving");
+      setStatus("Saving brain...");
+      try {
+        await jsonFetch<AdvisorBrainResponse>(`/api/advisors/${advisor.id}/brain`, {
+          method: "PATCH",
+          body: JSON.stringify(brainSnapshot),
+        });
+        lastSavedBrainRef.current = serialized;
+        if (latestBrainSerializedRef.current === serialized) {
+          setBrainSaveState("saved");
+          setStatus(options.automatic ? "Brain autosaved." : "Brain saved to markdown files.");
+        }
+      } catch (err) {
+        if (latestBrainSerializedRef.current === serialized) {
+          setBrainSaveState("error");
+          setStatus(
+            err instanceof Error ? `Brain save failed: ${err.message}` : "Brain save failed.",
+          );
+        }
+      } finally {
+        isBrainSaveInFlightRef.current = false;
+        const pending = pendingBrainSaveRef.current;
+        pendingBrainSaveRef.current = null;
+        if (pending && pending.serialized !== lastSavedBrainRef.current) {
+          void saveBrainSnapshot(pending.brain, pending.serialized, { automatic: true });
+        } else if (
+          latestBrainRef.current &&
+          latestBrainSerializedRef.current !== lastSavedBrainRef.current
+        ) {
+          void saveBrainSnapshot(latestBrainRef.current, latestBrainSerializedRef.current, {
+            automatic: true,
+          });
+        }
+      }
+    },
+    [advisor.id],
+  );
+
+  React.useEffect(() => {
+    if (!brain) return;
+    const serialized = JSON.stringify(brain);
+    latestBrainRef.current = brain;
+    latestBrainSerializedRef.current = serialized;
+    if (serialized === lastSavedBrainRef.current) {
+      if (!isBrainSaveInFlightRef.current) setBrainSaveState("idle");
+      return;
+    }
+    setBrainSaveState("pending");
+    const handle = window.setTimeout(() => {
+      void saveBrainSnapshot(brain, serialized, { automatic: true });
+    }, BRAIN_AUTOSAVE_DELAY_MS);
+    return () => window.clearTimeout(handle);
+  }, [brain, saveBrainSnapshot]);
+
   const saveBrain = async () => {
     if (!brain) return;
-    const data = await jsonFetch<AdvisorBrainResponse>(`/api/advisors/${advisor.id}/brain`, {
-      method: "PATCH",
-      body: JSON.stringify(brain),
-    });
-    setBrain(data.brain);
-    setStatus("Brain saved to markdown files.");
+    const serialized = JSON.stringify(brain);
+    latestBrainRef.current = brain;
+    latestBrainSerializedRef.current = serialized;
+    pendingBrainSaveRef.current = null;
+    await saveBrainSnapshot(brain, serialized, { automatic: false });
   };
 
   const deleteCurrentAdvisor = async () => {
@@ -1302,6 +1712,19 @@ function AdvisorWorkspace({
   if (!brain) {
     return <EmptyPanel title="Loading advisor brain" body="Reading local markdown files..." />;
   }
+
+  const workspaceTabs: Array<{
+    id: AdvisorWorkspaceTab;
+    label: string;
+    meta: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }> = [
+    { id: "llm", label: "Advisor LLM", meta: "4", icon: UserCog },
+    { id: "wiki", label: "Wiki", meta: String(brain.wikiPages.length), icon: BookOpen },
+    { id: "skills", label: "Skills", meta: String(brain.skills.length), icon: Sparkles },
+    { id: "sources", label: "Sources", meta: String(sources.length), icon: Folder },
+    { id: "workshop", label: "Workshop", meta: "AI", icon: MessageCircle },
+  ];
 
   return (
     <ScrollArea className="h-full min-h-0">
@@ -1346,79 +1769,165 @@ function AdvisorWorkspace({
 
         {status && <p className="text-muted-foreground text-sm">{status}</p>}
 
-        <section className="grid gap-4 xl:grid-cols-2">
-          <EditorCard title="Profile">
-            <Textarea
-              value={brain.profile}
-              onChange={(event) => setBrain({ ...brain, profile: event.target.value })}
-              className="min-h-44 font-mono text-sm"
-            />
-          </EditorCard>
-          <EditorCard title="Vision">
-            <Textarea
-              value={brain.vision}
-              onChange={(event) => setBrain({ ...brain, vision: event.target.value })}
-              className="min-h-44 font-mono text-sm"
-            />
-          </EditorCard>
-          <EditorCard title="Direction">
-            <Textarea
-              value={brain.direction}
-              onChange={(event) => setBrain({ ...brain, direction: event.target.value })}
-              className="min-h-44 font-mono text-sm"
-            />
-          </EditorCard>
-          <EditorCard title="Founder Memory">
-            <Textarea
-              value={brain.memory}
-              onChange={(event) => setBrain({ ...brain, memory: event.target.value })}
-              className="min-h-44 font-mono text-sm"
-            />
-          </EditorCard>
+        <section
+          aria-label="Advisor editor sections"
+          className="border-border bg-card rounded-md border p-2"
+        >
+          <div
+            role="tablist"
+            aria-label="Advisor editor sections"
+            className="grid gap-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5"
+          >
+            {workspaceTabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeWorkspaceTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  id={`advisor-editor-tab-${tab.id}`}
+                  aria-selected={isActive}
+                  aria-controls={`advisor-editor-panel-${tab.id}`}
+                  onClick={() => setActiveWorkspaceTab(tab.id)}
+                  className={cn(
+                    "focus-visible:ring-ring/50 flex min-h-11 items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors outline-none focus-visible:ring-2",
+                    isActive
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Icon className="size-4 shrink-0" />
+                    <span className="truncate">{tab.label}</span>
+                  </span>
+                  <span
+                    className={cn(
+                      "rounded-md px-1.5 py-0.5 font-mono text-[10px] leading-none",
+                      isActive ? "bg-primary-foreground/15" : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {tab.meta}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </section>
 
-        <PageCollectionEditor
-          title="Advisor Wiki"
-          pages={brain.wikiPages}
-          onChange={(wikiPages) => setBrain({ ...brain, wikiPages })}
-        />
-        <PageCollectionEditor
-          title="Advisor Skills"
-          pages={brain.skills}
-          addLabel="Add skill"
-          onAdd={() => setIsSkillCreatorOpen(true)}
-          onChange={(skills) => setBrain({ ...brain, skills })}
-        />
+        <section
+          id="advisor-editor-panel-llm"
+          role="tabpanel"
+          aria-labelledby="advisor-editor-tab-llm"
+          hidden={activeWorkspaceTab !== "llm"}
+          className="space-y-4"
+        >
+          <div className="grid gap-4 xl:grid-cols-2">
+            <EditorCard title="Profile">
+              <Textarea
+                value={brain.profile}
+                onChange={(event) => setBrain({ ...brain, profile: event.target.value })}
+                className="min-h-44 font-mono text-sm"
+              />
+            </EditorCard>
+            <EditorCard title="Vision">
+              <Textarea
+                value={brain.vision}
+                onChange={(event) => setBrain({ ...brain, vision: event.target.value })}
+                className="min-h-44 font-mono text-sm"
+              />
+            </EditorCard>
+            <EditorCard title="Direction">
+              <Textarea
+                value={brain.direction}
+                onChange={(event) => setBrain({ ...brain, direction: event.target.value })}
+                className="min-h-44 font-mono text-sm"
+              />
+            </EditorCard>
+            <EditorCard title="Founder Memory">
+              <Textarea
+                value={brain.memory}
+                onChange={(event) => setBrain({ ...brain, memory: event.target.value })}
+                className="min-h-44 font-mono text-sm"
+              />
+            </EditorCard>
+          </div>
+          <SaveBrainRow onSave={saveBrain} saveState={brainSaveState} />
+        </section>
 
-        <div className="flex justify-end">
-          <Button onClick={saveBrain}>
-            <Save className="size-4" />
-            Save brain
-          </Button>
-        </div>
+        <section
+          id="advisor-editor-panel-wiki"
+          role="tabpanel"
+          aria-labelledby="advisor-editor-tab-wiki"
+          hidden={activeWorkspaceTab !== "wiki"}
+          className="space-y-4"
+        >
+          <LlmWikiEditor
+            brain={brain}
+            sources={sources}
+            selectedSource={selectedSource}
+            onBrainChange={setBrain}
+            onSourceSelect={setSelectedSourceId}
+            onOpenSources={() => setActiveWorkspaceTab("sources")}
+            onSaveBrain={saveBrain}
+            saveState={brainSaveState}
+          />
+        </section>
 
-        <SourcesEditor
-          advisorId={advisor.id}
-          sources={sources}
-          selectedSource={selectedSource}
-          onSelect={setSelectedSourceId}
-          onChangeSelected={(source) =>
-            setSources((items) => items.map((item) => (item.id === source.id ? source : item)))
-          }
-          onSaveSelected={saveSource}
-          onDelete={deleteSourceById}
-          onImported={async (source) => {
-            setSelectedSourceId(source.id);
-            await load();
-            setStatus(
-              source.status === "needs_review"
-                ? "Source captured. Review the extracted text before distilling it."
-                : "Source imported.",
-            );
-          }}
-        />
+        <section
+          id="advisor-editor-panel-skills"
+          role="tabpanel"
+          aria-labelledby="advisor-editor-tab-skills"
+          hidden={activeWorkspaceTab !== "skills"}
+          className="space-y-4"
+        >
+          <PageCollectionEditor
+            title="Advisor Skills"
+            pages={brain.skills}
+            addLabel="Skill creator"
+            addIcon={Sparkles}
+            onAdd={() => setIsSkillCreatorOpen(true)}
+            onChange={(skills) => setBrain({ ...brain, skills })}
+          />
+          <SaveBrainRow onSave={saveBrain} saveState={brainSaveState} />
+        </section>
 
-        <WorkshopChat advisor={advisor} />
+        <section
+          id="advisor-editor-panel-sources"
+          role="tabpanel"
+          aria-labelledby="advisor-editor-tab-sources"
+          hidden={activeWorkspaceTab !== "sources"}
+        >
+          <SourcesEditor
+            advisorId={advisor.id}
+            sources={sources}
+            selectedSource={selectedSource}
+            onSelect={setSelectedSourceId}
+            onChangeSelected={(source) =>
+              setSources((items) => items.map((item) => (item.id === source.id ? source : item)))
+            }
+            onSaveSelected={saveSource}
+            onDelete={deleteSourceById}
+            onImported={async (source) => {
+              if (source) setSelectedSourceId(source.id);
+              await load();
+              setStatus(
+                source?.status === "needs_review"
+                  ? "Source captured. Review the extracted text before distilling it."
+                  : "Source imported.",
+              );
+            }}
+          />
+        </section>
+
+        <section
+          id="advisor-editor-panel-workshop"
+          role="tabpanel"
+          aria-labelledby="advisor-editor-tab-workshop"
+          hidden={activeWorkspaceTab !== "workshop"}
+        >
+          <WorkshopChat advisor={advisor} />
+        </section>
         <SkillCreatorDialog
           advisor={advisor}
           open={isSkillCreatorOpen}
@@ -1433,11 +1942,347 @@ function AdvisorWorkspace({
             setBrain((current) =>
               current ? { ...current, skills: [...current.skills, page] } : current,
             );
-            setStatus("Skill draft inserted. Save brain to write it to markdown.");
+            setStatus("Skill draft inserted.");
           }}
         />
       </div>
     </ScrollArea>
+  );
+}
+
+function SaveBrainRow({
+  onSave,
+  saveState,
+}: {
+  onSave: () => void | Promise<void>;
+  saveState: BrainSaveState;
+}) {
+  const isSaving = saveState === "saving";
+  return (
+    <div className="flex justify-end">
+      <Button onClick={() => void onSave()} disabled={isSaving}>
+        <Save className="size-4" />
+        {isSaving ? "Saving..." : "Save brain"}
+      </Button>
+    </div>
+  );
+}
+
+function LlmWikiEditor({
+  brain,
+  sources,
+  selectedSource,
+  onBrainChange,
+  onSourceSelect,
+  onOpenSources,
+  onSaveBrain,
+  saveState,
+}: {
+  brain: AdvisorBrain;
+  sources: AdvisorSource[];
+  selectedSource: AdvisorSource | null;
+  onBrainChange: (brain: AdvisorBrain) => void;
+  onSourceSelect: (id: string) => void;
+  onOpenSources: () => void;
+  onSaveBrain: () => void | Promise<void>;
+  saveState: BrainSaveState;
+}) {
+  const [layer, setLayer] = React.useState<LlmWikiLayer>("wiki");
+  const [showFiles, setShowFiles] = React.useState(true);
+  const [selectedWikiSlug, setSelectedWikiSlug] = React.useState(brain.wikiPages[0]?.slug ?? "");
+
+  React.useEffect(() => {
+    if (layer !== "wiki") return;
+    if (brain.wikiPages.some((page) => page.slug === selectedWikiSlug)) return;
+    setSelectedWikiSlug(brain.wikiPages[0]?.slug ?? "");
+  }, [brain.wikiPages, layer, selectedWikiSlug]);
+
+  const selectedWikiIndex = brain.wikiPages.findIndex((page) => page.slug === selectedWikiSlug);
+  const selectedWikiPage = selectedWikiIndex >= 0 ? brain.wikiPages[selectedWikiIndex] : null;
+
+  const layers: Array<{
+    id: LlmWikiLayer;
+    label: string;
+    meta: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }> = [
+    { id: "sources", label: "Raw sources", meta: String(sources.length), icon: FileText },
+    { id: "wiki", label: "The wiki", meta: String(brain.wikiPages.length), icon: BookOpen },
+    { id: "schema", label: "The schema", meta: "md", icon: Settings },
+  ];
+
+  const updateWikiPage = (index: number, patch: Partial<BrainPage>) => {
+    onBrainChange({
+      ...brain,
+      wikiPages: brain.wikiPages.map((page, pageIndex) =>
+        pageIndex === index ? { ...page, ...patch, updatedAt: Date.now() } : page,
+      ),
+    });
+  };
+
+  const addWikiPage = () => {
+    const title = "New page";
+    const slug = uniquePageSlug(`new-${brain.wikiPages.length + 1}`, brain.wikiPages);
+    onBrainChange({
+      ...brain,
+      wikiPages: [
+        ...brain.wikiPages,
+        {
+          slug,
+          title,
+          content: "# New page\n\n",
+          updatedAt: Date.now(),
+        },
+      ],
+    });
+    setSelectedWikiSlug(slug);
+    setLayer("wiki");
+    setShowFiles(true);
+  };
+
+  const deleteWikiPage = (slug: string) => {
+    const nextPages = brain.wikiPages.filter((page) => page.slug !== slug);
+    onBrainChange({ ...brain, wikiPages: nextPages });
+    setSelectedWikiSlug(nextPages[0]?.slug ?? "");
+  };
+
+  const selectedSourceFile = selectedSource ? `${selectedSource.id}.md` : "No source selected";
+
+  return (
+    <section className="border-border bg-card rounded-lg border">
+      <div className="border-border flex flex-wrap items-center justify-between gap-3 border-b p-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={showFiles ? "secondary" : "outline"}
+            onClick={() => setShowFiles((current) => !current)}
+          >
+            <Folder className="size-4" />
+            Files
+          </Button>
+          <div
+            role="tablist"
+            aria-label="LLM Wiki layers"
+            className="border-border grid overflow-hidden rounded-md border sm:grid-cols-3"
+          >
+            {layers.map((item) => {
+              const Icon = item.icon;
+              const isActive = layer === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => setLayer(item.id)}
+                  className={cn(
+                    "hover:bg-muted flex min-h-9 items-center justify-between gap-3 border-b px-3 text-left text-xs font-medium transition-colors last:border-b-0 sm:border-r sm:border-b-0 sm:last:border-r-0",
+                    isActive && "bg-brand-muted text-brand",
+                  )}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Icon className="size-3.5 shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                  </span>
+                  <span className="text-muted-foreground font-mono text-[10px]">{item.meta}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <SaveBrainRow onSave={onSaveBrain} saveState={saveState} />
+      </div>
+
+      <div className={cn("grid min-h-[520px]", showFiles && "lg:grid-cols-[260px_minmax(0,1fr)]")}>
+        {showFiles && (
+          <aside className="border-border bg-muted/20 min-h-0 border-b p-3 lg:border-r lg:border-b-0">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+                Files
+              </p>
+              {layer === "wiki" && (
+                <Button type="button" variant="outline" size="sm" onClick={addWikiPage}>
+                  <Plus className="size-3.5" />
+                  Add
+                </Button>
+              )}
+            </div>
+            <div className="space-y-1">
+              {layer === "sources" &&
+                sources.map((source) => (
+                  <button
+                    key={source.id}
+                    type="button"
+                    onClick={() => onSourceSelect(source.id)}
+                    className={cn(
+                      "hover:bg-background border-border/70 w-full rounded-md border px-2 py-2 text-left text-xs transition-colors",
+                      selectedSource?.id === source.id && "border-brand/60 bg-brand-muted",
+                    )}
+                  >
+                    <span className="block truncate font-mono">{source.id}.md</span>
+                    <span className="text-muted-foreground mt-0.5 block truncate">
+                      {source.title}
+                    </span>
+                  </button>
+                ))}
+              {layer === "sources" && sources.length === 0 && (
+                <div className="border-border text-muted-foreground rounded-md border border-dashed p-3 text-xs">
+                  No raw sources.
+                </div>
+              )}
+              {layer === "wiki" &&
+                brain.wikiPages.map((page) => (
+                  <button
+                    key={`${page.slug}-${page.updatedAt}`}
+                    type="button"
+                    onClick={() => setSelectedWikiSlug(page.slug)}
+                    className={cn(
+                      "hover:bg-background border-border/70 w-full rounded-md border px-2 py-2 text-left text-xs transition-colors",
+                      selectedWikiSlug === page.slug && "border-brand/60 bg-brand-muted",
+                    )}
+                  >
+                    <span className="block truncate font-mono">{page.slug}.md</span>
+                    <span className="text-muted-foreground mt-0.5 block truncate">
+                      {page.title}
+                    </span>
+                  </button>
+                ))}
+              {layer === "wiki" && brain.wikiPages.length === 0 && (
+                <div className="border-border text-muted-foreground rounded-md border border-dashed p-3 text-xs">
+                  No wiki pages.
+                </div>
+              )}
+              {layer === "schema" && (
+                <button
+                  type="button"
+                  className="border-brand/60 bg-brand-muted w-full rounded-md border px-2 py-2 text-left text-xs"
+                >
+                  <span className="block truncate font-mono">schema.md</span>
+                  <span className="text-muted-foreground mt-0.5 block truncate">The schema</span>
+                </button>
+              )}
+            </div>
+          </aside>
+        )}
+
+        <div className="min-w-0 p-3">
+          {layer === "sources" && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-muted-foreground font-mono text-xs">{selectedSourceFile}</p>
+                  <h3 className="truncate text-sm font-semibold">
+                    {selectedSource?.title ?? "Raw sources"}
+                  </h3>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={onOpenSources}>
+                  <FolderPlus className="size-4" />
+                  Sources
+                </Button>
+              </div>
+              {selectedSource ? (
+                <>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <span className="border-border bg-background rounded-md border px-2 py-1">
+                      {selectedSource.kind ?? "text"}
+                    </span>
+                    <span
+                      className={cn(
+                        "border-border bg-background rounded-md border px-2 py-1",
+                        selectedSource.status === "needs_review" &&
+                          "border-destructive/30 bg-destructive/10 text-destructive",
+                      )}
+                    >
+                      {selectedSource.status ?? "ready"}
+                    </span>
+                    {selectedSource.sourceUrl && (
+                      <span className="border-border bg-background text-muted-foreground max-w-full truncate rounded-md border px-2 py-1">
+                        {selectedSource.sourceUrl}
+                      </span>
+                    )}
+                  </div>
+                  <Textarea
+                    readOnly
+                    value={selectedSource.body}
+                    className="min-h-[420px] resize-y bg-muted/20 font-mono text-sm"
+                  />
+                </>
+              ) : (
+                <EmptyPanel title="No source selected" body="Add or select a raw source." />
+              )}
+            </div>
+          )}
+
+          {layer === "wiki" && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-muted-foreground font-mono text-xs">
+                    {selectedWikiPage ? `${selectedWikiPage.slug}.md` : "wiki/"}
+                  </p>
+                  <h3 className="truncate text-sm font-semibold">The wiki</h3>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={addWikiPage}>
+                  <Plus className="size-4" />
+                  Add page
+                </Button>
+              </div>
+              {selectedWikiPage ? (
+                <>
+                  <div className="grid gap-2 md:grid-cols-[200px_minmax(0,1fr)_auto]">
+                    <Input
+                      value={selectedWikiPage.slug}
+                      onChange={(event) => {
+                        setSelectedWikiSlug(event.target.value);
+                        updateWikiPage(selectedWikiIndex, { slug: event.target.value });
+                      }}
+                    />
+                    <Input
+                      value={selectedWikiPage.title}
+                      onChange={(event) =>
+                        updateWikiPage(selectedWikiIndex, { title: event.target.value })
+                      }
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteWikiPage(selectedWikiPage.slug)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={selectedWikiPage.content}
+                    onChange={(event) =>
+                      updateWikiPage(selectedWikiIndex, { content: event.target.value })
+                    }
+                    className="min-h-[420px] resize-y font-mono text-sm"
+                  />
+                </>
+              ) : (
+                <EmptyPanel title="No wiki page selected" body="Create a wiki page." />
+              )}
+            </div>
+          )}
+
+          {layer === "schema" && (
+            <div className="space-y-3">
+              <div className="min-w-0">
+                <p className="text-muted-foreground font-mono text-xs">schema.md</p>
+                <h3 className="truncate text-sm font-semibold">The schema</h3>
+              </div>
+              <Textarea
+                value={brain.schema}
+                onChange={(event) => onBrainChange({ ...brain, schema: event.target.value })}
+                className="min-h-[500px] resize-y font-mono text-sm"
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1852,12 +2697,14 @@ function PageCollectionEditor({
   pages,
   onChange,
   addLabel = "Add page",
+  addIcon: AddIcon = Plus,
   onAdd,
 }: {
   title: string;
   pages: BrainPage[];
   onChange: (pages: BrainPage[]) => void;
   addLabel?: string;
+  addIcon?: React.ComponentType<{ className?: string }>;
   onAdd?: () => void;
 }) {
   const update = (index: number, patch: Partial<BrainPage>) => {
@@ -1885,7 +2732,7 @@ function PageCollectionEditor({
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold">{title}</h3>
         <Button size="sm" variant="outline" onClick={addPage}>
-          <Plus className="size-4" />
+          <AddIcon className="size-4" />
           {addLabel}
         </Button>
       </div>

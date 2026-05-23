@@ -38,6 +38,9 @@ export type CodexModelId = (typeof CODEX_MODEL_OPTIONS)[number]["id"];
 export type CodexReasoningEffort = (typeof CODEX_REASONING_OPTIONS)[number]["id"];
 export type CodexTextVerbosity = (typeof CODEX_TEXT_VERBOSITY_OPTIONS)[number]["id"];
 
+export const MIN_CHECKIN_INTERVAL_DAYS = 1;
+export const MAX_CHECKIN_INTERVAL_DAYS = 30;
+
 export interface AppModelSettings {
   model: CodexModelId;
   reasoningEffort: CodexReasoningEffort;
@@ -45,8 +48,13 @@ export interface AppModelSettings {
   openAIApiKey?: string;
 }
 
+export interface AppCheckinSettings {
+  intervalDays: number;
+}
+
 export interface AppSettings {
   model: AppModelSettings;
+  checkins: AppCheckinSettings;
 }
 
 export const DEFAULT_APP_MODEL_SETTINGS: AppModelSettings = {
@@ -56,8 +64,13 @@ export const DEFAULT_APP_MODEL_SETTINGS: AppModelSettings = {
   openAIApiKey: "",
 };
 
+export const DEFAULT_APP_CHECKIN_SETTINGS: AppCheckinSettings = {
+  intervalDays: 2,
+};
+
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   model: DEFAULT_APP_MODEL_SETTINGS,
+  checkins: DEFAULT_APP_CHECKIN_SETTINGS,
 };
 
 const CODEX_MODEL_IDS = new Set<string>(CODEX_MODEL_OPTIONS.map((option) => option.id));
@@ -100,8 +113,25 @@ export function normalizeAppModelSettings(input: unknown): AppModelSettings {
   };
 }
 
+function normalizeCheckinIntervalDays(value: unknown) {
+  const numericValue =
+    typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  if (!Number.isFinite(numericValue)) return DEFAULT_APP_CHECKIN_SETTINGS.intervalDays;
+  return Math.min(
+    MAX_CHECKIN_INTERVAL_DAYS,
+    Math.max(MIN_CHECKIN_INTERVAL_DAYS, Math.round(numericValue)),
+  );
+}
+
+export function normalizeAppCheckinSettings(input: unknown): AppCheckinSettings {
+  return {
+    intervalDays: normalizeCheckinIntervalDays(objectValue(input, "intervalDays")),
+  };
+}
+
 export function normalizeAppSettings(input: unknown): AppSettings {
   return {
     model: normalizeAppModelSettings(objectValue(input, "model")),
+    checkins: normalizeAppCheckinSettings(objectValue(input, "checkins")),
   };
 }

@@ -57,6 +57,35 @@ function defaultIndex(): StoreIndex {
   };
 }
 
+function defaultWikiSchema(advisorName = "Marten Mickos") {
+  return `# The Schema
+
+This file defines how ${advisorName}'s LLM Wiki is maintained.
+
+## Layers
+
+- Raw sources: immutable source material captured under the advisor source registry. Read and cite these, but do not rewrite them while compiling the wiki.
+- The wiki: LLM-maintained markdown pages that summarize, connect, and reconcile the sources into reusable founder-facing knowledge.
+- The schema: this file. It records the conventions and workflows the LLM should follow when ingesting sources, answering questions, and maintaining the wiki.
+
+## Workflow
+
+1. Ingest one source at a time when possible.
+2. Extract durable claims, concepts, people, frameworks, and contradictions.
+3. Update the relevant wiki pages instead of creating duplicate summaries.
+4. Preserve source provenance in page text when a claim depends on a source.
+5. Update index and log pages when the wiki structure changes.
+6. Flag contradictions or weak extraction instead of silently choosing a side.
+
+## Response Rules
+
+- Prefer the compiled wiki for synthesis.
+- Fall back to raw sources when the wiki is thin, stale, or contested.
+- Do not invent advisor-specific frameworks when neither sources nor wiki support them.
+- Keep advisor guidance concise, direct, and action-oriented.
+`;
+}
+
 function defaultBrain(advisorName = "Marten Mickos"): AdvisorBrain {
   return {
     profile: `# ${advisorName}\n\nAdvisor profile for Sprint Buddy. Add real source material in the Advisor Editor before relying on advisor-specific claims.`,
@@ -66,6 +95,7 @@ function defaultBrain(advisorName = "Marten Mickos"): AdvisorBrain {
       "# Direction\n\n- Be concise and direct.\n- Name the real issue before giving advice.\n- Ask one uncomfortable but useful question.\n- End with one next action the founder can take within 24 hours.\n- Do not fabricate advisor-specific frameworks when the wiki is empty.",
     memory:
       "# Founder Memory\n\nConcise pattern memory from Buddy Chat will appear here. Keep it short, private, and action-oriented.",
+    schema: defaultWikiSchema(advisorName),
     wikiPages: [
       {
         slug: "sprint-buddy-challenge",
@@ -192,6 +222,8 @@ async function ensureAdvisorFiles(advisor: Advisor, brain = defaultBrain(advisor
     await writeText(path.join(dir, "direction.md"), brain.direction);
   if (!(await exists(path.join(dir, "memory.md"))))
     await writeText(path.join(dir, "memory.md"), brain.memory);
+  if (!(await exists(path.join(dir, "schema.md"))))
+    await writeText(path.join(dir, "schema.md"), brain.schema || defaultWikiSchema(advisor.name));
   if ((await readPageDir(path.join(dir, "wiki"))).length === 0) {
     await writePageDir(path.join(dir, "wiki"), brain.wikiPages);
   }
@@ -209,6 +241,7 @@ async function writeAdvisorBrain(advisorId: string, brain: AdvisorBrain) {
   await writeText(path.join(dir, "vision.md"), brain.vision);
   await writeText(path.join(dir, "direction.md"), brain.direction);
   await writeText(path.join(dir, "memory.md"), brain.memory);
+  await writeText(path.join(dir, "schema.md"), brain.schema || defaultWikiSchema());
   await writePageDir(path.join(dir, "wiki"), brain.wikiPages);
   await writePageDir(path.join(dir, "skills"), brain.skills);
 }
@@ -299,6 +332,7 @@ export async function getAdvisorBrain(advisorId: string): Promise<AdvisorBrain |
     vision: await readText(path.join(dir, "vision.md")),
     direction: await readText(path.join(dir, "direction.md")),
     memory: await readText(path.join(dir, "memory.md")),
+    schema: await readText(path.join(dir, "schema.md"), defaultWikiSchema(advisor.name)),
     wikiPages: await readPageDir(path.join(dir, "wiki")),
     skills: await readPageDir(path.join(dir, "skills")),
   };
@@ -422,6 +456,43 @@ function textFromMessage(message: AppUIMessage) {
     .trim();
 }
 
+function metadataCreatedAt(message: AppUIMessage) {
+  if (!message.metadata || typeof message.metadata !== "object") return null;
+  const value = (message.metadata as { createdAt?: unknown }).createdAt;
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function toAppMessage(message: StoredMessage): AppUIMessage {
+  return {
+    id: message.id,
+    role: message.role,
+    parts: message.parts,
+    metadata: { createdAt: message.createdAt },
+  } as AppUIMessage;
+}
+
+export async function listConversations(advisorId?: string) {
+  const index = await loadIndex();
+  return index.conversations
+    .filter((conversation) => !advisorId || conversation.advisorId === advisorId)
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+export async function getConversation(conversationId: string, advisorId?: string) {
+  const index = await loadIndex();
+  const conversation = index.conversations.find(
+    (item) => item.id === conversationId && (!advisorId || item.advisorId === advisorId),
+  );
+  if (!conversation) return null;
+
+  const messages = index.messages
+    .filter((message) => message.conversationId === conversationId)
+    .sort((a, b) => a.createdAt - b.createdAt)
+    .map(toAppMessage);
+
+  return { conversation, messages };
+}
+
 export async function saveConversationMessages(
   conversationId: string,
   advisorId: string,
@@ -446,6 +517,11 @@ export async function saveConversationMessages(
       updatedAt: timestamp,
     });
   }
+  const existingMessageTimes = new Map(
+    index.messages
+      .filter((message) => message.conversationId === conversationId)
+      .map((message) => [message.id, message.createdAt] as const),
+  );
   index.messages = index.messages.filter((message) => message.conversationId !== conversationId);
   index.messages.push(
     ...messages.map((message) => ({
@@ -453,7 +529,7 @@ export async function saveConversationMessages(
       conversationId,
       role: message.role,
       parts: message.parts,
-      createdAt: timestamp,
+      createdAt: metadataCreatedAt(message) ?? existingMessageTimes.get(message.id) ?? timestamp,
     })),
   );
   await saveIndex(index);
@@ -510,6 +586,7 @@ export async function searchAdvisorBrain(advisorId: string, query: string): Prom
     { source: "vision", slug: "vision", title: "Vision", text: brain.vision },
     { source: "direction", slug: "direction", title: "Direction", text: brain.direction },
     { source: "memory", slug: "memory", title: "Founder Memory", text: brain.memory },
+    { source: "schema", slug: "schema", title: "The Schema", text: brain.schema },
     ...brain.wikiPages.map((page) => ({
       source: "wiki" as const,
       slug: page.slug,
@@ -552,6 +629,7 @@ export async function readAdvisorPage(advisorId: string, slug: string) {
     { slug: "vision", title: "Vision", content: brain.vision },
     { slug: "direction", title: "Direction", content: brain.direction },
     { slug: "memory", title: "Founder Memory", content: brain.memory },
+    { slug: "schema", title: "The Schema", content: brain.schema },
     ...brain.wikiPages,
     ...brain.skills,
     ...sources.map((source) => ({ slug: source.id, title: source.title, content: source.body })),
@@ -572,7 +650,7 @@ export async function addCheckins(
 ) {
   const index = await loadIndex();
   const timestamp = now();
-  const dueAt = timestamp + Number(process.env.CHECKIN_INTERVAL_DAYS ?? 2) * 24 * 60 * 60 * 1000;
+  const dueAt = timestamp + index.settings.checkins.intervalDays * 24 * 60 * 60 * 1000;
   const checkins = items.map((item) => ({
     id: generateId(),
     advisorId,
@@ -597,7 +675,8 @@ export async function updateCheckin(id: string, status: CheckinStatus) {
 }
 
 export async function shouldGenerateCheckins(advisorId: string) {
-  const intervalDays = Number(process.env.CHECKIN_INTERVAL_DAYS ?? 2);
+  const index = await loadIndex();
+  const intervalDays = index.settings.checkins.intervalDays;
   const checkins = await listCheckins(advisorId);
   const newest = checkins[0];
   if (!newest) return true;
