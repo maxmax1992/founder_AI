@@ -1,8 +1,19 @@
+import path from "node:path";
 import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
 import { fetchTranscript } from "youtube-transcript";
 
 import type { AdvisorSource } from "@/lib/types";
+
+// Fix for pdfjs-dist worker in Next.js/Node environment
+if (typeof process !== "undefined" && process.env.NODE_ENV !== "browser") {
+  try {
+    const workerPath = path.resolve(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs");
+    PDFParse.setWorker(workerPath);
+  } catch (e) {
+    console.error("Failed to set PDF worker path:", e);
+  }
+}
 
 export type ImportedSource = Pick<AdvisorSource, "title" | "body"> &
   Partial<Pick<AdvisorSource, "kind" | "sourceUrl" | "status" | "extractionNote">>;
