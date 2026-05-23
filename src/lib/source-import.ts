@@ -18,7 +18,9 @@ if (typeof process !== "undefined" && process.env.NODE_ENV !== "browser") {
 export type ImportedSource = Pick<AdvisorSource, "title" | "body"> &
   Partial<Pick<AdvisorSource, "kind" | "sourceUrl" | "status" | "extractionNote">>;
 
-const MAX_SOURCE_CHARS = 80_000;
+const MAX_SOURCE_CHARS = 100_000;
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 export function buildTextSource(title: string, body: string): ImportedSource {
   return {
@@ -32,8 +34,9 @@ export function buildTextSource(title: string, body: string): ImportedSource {
 export async function importWebsiteSource(url: string, title?: string): Promise<ImportedSource> {
   const res = await fetch(url, {
     headers: {
-      "user-agent": "SprintBuddySourceImporter/0.1",
-      accept: "text/html,text/plain;q=0.9,*/*;q=0.8",
+      "user-agent": USER_AGENT,
+      accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+      "accept-language": "en-US,en;q=0.5",
     },
   });
   if (!res.ok) {
@@ -41,15 +44,92 @@ export async function importWebsiteSource(url: string, title?: string): Promise<
   }
   const html = await res.text();
   const inferredTitle = title || extractTitle(html) || new URL(url).hostname;
-  const text = stripHtml(html).slice(0, MAX_SOURCE_CHARS);
+
+  // Try SPA-specific extraction first (Inertia, Next.js, etc)
+  let text = extractSpaContent(html);
+
+  // Fallback to traditional HTML stripping
+  if (!text || text.length < 200) {
+    text = stripHtml(html);
+  }
+
+  text = text.slice(0, MAX_SOURCE_CHARS);
+
   return {
     kind: "website",
     title: inferredTitle,
     sourceUrl: url,
     body: withHeader(inferredTitle, "Website", url, text),
-    status: text ? "ready" : "needs_review",
-    extractionNote: text ? undefined : "Fetched the URL but did not extract readable text.",
+    status: text.length > 50 ? "ready" : "needs_review",
+    extractionNote: text.length > 50 ? undefined : "Fetched the URL but extracted very little text.",
   };
+}
+
+function extractSpaContent(html: string): string | null {
+  // Inertia.js (used by YC library)
+  const inertiaMatch = html.match(/data-page="([\s\S]*?)"/);
+  if (inertiaMatch) {
+    try {
+      const json = JSON.parse(decodeEntities(inertiaMatch[1]));
+      return findRichContent(json);
+    } catch {}
+  }
+
+  // Next.js
+  const nextMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+  if (nextMatch) {
+    try {
+      const json = JSON.parse(nextMatch[1]);
+      return findRichContent(json);
+    } catch {}
+  }
+
+  return null;
+}
+
+/**
+ * Heuristically find the "main" content in a large JSON blob by looking for
+ * long strings that contain multiple sentences or common content keys.
+ */
+function findRichContent(obj: any): string | null {
+  let best = "";
+  const queue = [obj];
+  const seen = new Set();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || (typeof current === "object" && seen.has(current))) continue;
+    if (typeof current === "object") seen.add(current);
+
+    if (typeof current === "string") {
+      if (current.length > best.length) {
+        // Simple heuristic: must have spaces and some punctuation to be prose
+        if (current.includes(" ") && (current.includes(".") || current.includes("\n"))) {
+          best = current;
+        }
+      }
+    } else if (Array.isArray(current)) {
+      queue.push(...current);
+    } else if (typeof current === "object" && current !== null) {
+      // Check for specific keys first in this specific object level
+      const priorityKeys = ["content", "body", "article", "text", "description"];
+      for (const key of priorityKeys) {
+        if (typeof current[key] === "string" && current[key].length > 500) {
+          return current[key];
+        }
+      }
+
+      for (const k in current) {
+        try {
+          queue.push(current[k]);
+        } catch {
+          // Ignore potential getter errors
+        }
+      }
+    }
+  }
+
+  return best.length > 100 ? best : null;
 }
 
 export async function importYoutubeSource(url: string, title?: string): Promise<ImportedSource> {
@@ -199,13 +279,22 @@ async function fetchYoutubeTitle(url: string) {
 }
 
 function decodeEntities(value: string) {
+  if (!value) return "";
   return value
-    .replaceAll("&amp;", "&")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&#39;", "'")
-    .replaceAll("&nbsp;", " ");
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&rsquo;/g, "'")
+    .replace(/&lsquo;/g, "'")
+    .replace(/&ldquo;/g, '"')
+    .replace(/&rdquo;/g, '"')
+    .replace(/&nbsp;/g, " ")
+    .replace(/&mdash;/g, "—")
+    .replace(/&ndash;/g, "–")
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 }
 
 function formatSeconds(seconds: number) {
