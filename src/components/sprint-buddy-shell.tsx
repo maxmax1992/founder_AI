@@ -516,6 +516,27 @@ function ModelSettingsControls({
         {!compact && (
           <div className="mt-3">
             <label
+              htmlFor="api-key-input"
+              className="text-muted-foreground mb-1 block text-xs font-medium tracking-wider uppercase"
+            >
+              OpenAI Key
+            </label>
+            <Input
+              id="api-key-input"
+              type="password"
+              autoComplete="off"
+              value={modelSettings.openAIApiKey ?? ""}
+              disabled={!settings}
+              onChange={(event) => onChange({ openAIApiKey: event.target.value })}
+              placeholder="sk-..."
+              className="h-8 text-xs"
+            />
+          </div>
+        )}
+
+        {!compact && (
+          <div className="mt-3">
+            <label
               htmlFor="verbosity-select"
               className="text-muted-foreground mb-1 block text-xs font-medium tracking-wider uppercase"
             >

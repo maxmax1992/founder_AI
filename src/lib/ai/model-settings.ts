@@ -42,6 +42,7 @@ export interface AppModelSettings {
   model: CodexModelId;
   reasoningEffort: CodexReasoningEffort;
   textVerbosity: CodexTextVerbosity;
+  openAIApiKey?: string;
 }
 
 export interface AppSettings {
@@ -52,6 +53,7 @@ export const DEFAULT_APP_MODEL_SETTINGS: AppModelSettings = {
   model: "gpt-5.5",
   reasoningEffort: "medium",
   textVerbosity: "medium",
+  openAIApiKey: "",
 };
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -89,10 +91,12 @@ function normalizeTextVerbosity(value: unknown): CodexTextVerbosity {
 }
 
 export function normalizeAppModelSettings(input: unknown): AppModelSettings {
+  const openAIApiKey = objectValue(input, "openAIApiKey");
   return {
     model: normalizeModelId(objectValue(input, "model")),
     reasoningEffort: normalizeReasoningEffort(objectValue(input, "reasoningEffort")),
     textVerbosity: normalizeTextVerbosity(objectValue(input, "textVerbosity")),
+    openAIApiKey: typeof openAIApiKey === "string" ? openAIApiKey : undefined,
   };
 }
 

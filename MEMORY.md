@@ -21,6 +21,8 @@ Durable repo context for future agents. Keep this concise and replace stale bull
 - Agent routes use AI SDK v6 `streamText`, `convertToModelMessages`, and `smoothStream({ chunking: "word", delayInMs: 24 })`.
 - Provider selection lives in `src/lib/ai/provider.ts`.
 - Default local provider path uses Codex App Server through `ai-sdk-provider-codex-cli` when `~/.codex/auth.json` exists.
+- OpenAI API mode can be enabled by setting `AI_PROVIDER=openai` in `.env` and providing an `OPENAI_API_KEY`.
+- The UI now supports entering the OpenAI API key directly in the sidebar settings, which is persisted in `data/index.json`. This key takes precedence over the environment variable.
 - Provider modes:
   - `AI_PROVIDER=codex` / `codex-cli` / `cli`
   - `AI_PROVIDER=openai`

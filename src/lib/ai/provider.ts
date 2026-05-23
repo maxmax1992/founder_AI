@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { gateway } from "@ai-sdk/gateway";
-import { type OpenAILanguageModelResponsesOptions, openai } from "@ai-sdk/openai";
+import { createOpenAI, type OpenAILanguageModelResponsesOptions, openai } from "@ai-sdk/openai";
 import type { SharedV3ProviderOptions } from "@ai-sdk/provider";
 import { type CodexAppServerSettings, createCodexAppServer } from "ai-sdk-provider-codex-cli";
 import {
@@ -108,6 +108,14 @@ function codexTextVerbosity(settings: AppModelSettings) {
   return settings.textVerbosity ?? DEFAULT_APP_MODEL_SETTINGS.textVerbosity;
 }
 
+function getOpenAIProvider(settings: AppModelSettings) {
+  const apiKey = settings.openAIApiKey || process.env.OPENAI_API_KEY;
+  if (apiKey) {
+    return createOpenAI({ apiKey });
+  }
+  return openai;
+}
+
 export function getCodexModel() {
   const settings = storedModelSettings();
   if (providerMode() === "codex-cli") {
@@ -116,7 +124,8 @@ export function getCodexModel() {
   if (providerMode() === "gateway") {
     return gateway(gatewayModelId(settings));
   }
-  return openai(openAIModelId(settings));
+  const provider = getOpenAIProvider(settings);
+  return provider(openAIModelId(settings));
 }
 
 export function getCodexProviderOptions(): SharedV3ProviderOptions {
@@ -125,25 +134,30 @@ export function getCodexProviderOptions(): SharedV3ProviderOptions {
 
 export function getCodexModelSettings() {
   const settings = storedModelSettings();
+  const provider =
+    providerMode() === "codex-cli"
+      ? codexAppServerProvider(codexCliModelId(settings), codexAppServerSettings(settings))
+      : providerMode() === "gateway"
+        ? gateway(gatewayModelId(settings))
+        : getOpenAIProvider(settings)(openAIModelId(settings));
+
   return {
-    model:
-      providerMode() === "codex-cli"
-        ? codexAppServerProvider(codexCliModelId(settings), codexAppServerSettings(settings))
-        : providerMode() === "gateway"
-          ? gateway(gatewayModelId(settings))
-          : openai(openAIModelId(settings)),
+    model: provider,
     providerOptions: getCodexProviderOptionsFor(settings),
   };
 }
 
 export function hasModelCredentials() {
+  const settings = storedModelSettings();
   if (providerMode() === "codex-cli") {
-    return hasCodexCliAuth() || Boolean(process.env.OPENAI_API_KEY);
+    return (
+      hasCodexCliAuth() || Boolean(process.env.OPENAI_API_KEY) || Boolean(settings.openAIApiKey)
+    );
   }
   if (providerMode() === "gateway") {
     return Boolean(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_AI_GATEWAY_API_KEY);
   }
-  return Boolean(process.env.OPENAI_API_KEY);
+  return Boolean(process.env.OPENAI_API_KEY) || Boolean(settings.openAIApiKey);
 }
 
 export function describeModelProvider() {

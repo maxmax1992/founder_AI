@@ -168,6 +168,7 @@ export const UpdateSettingsBodySchema = z.object({
     model: z.enum(codexModelIds),
     reasoningEffort: z.enum(codexReasoningIds),
     textVerbosity: z.enum(codexTextVerbosityIds),
+    openAIApiKey: z.string().optional(),
   }),
 });
 
