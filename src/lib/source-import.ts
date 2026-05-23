@@ -8,7 +8,10 @@ import type { AdvisorSource } from "@/lib/types";
 // Fix for pdfjs-dist worker in Next.js/Node environment
 if (typeof process !== "undefined" && process.env.NODE_ENV !== "browser") {
   try {
-    const workerPath = path.resolve(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs");
+    const workerPath = path.resolve(
+      process.cwd(),
+      "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
+    );
     PDFParse.setWorker(workerPath);
   } catch (e) {
     console.error("Failed to set PDF worker path:", e);
@@ -18,7 +21,6 @@ if (typeof process !== "undefined" && process.env.NODE_ENV !== "browser") {
 export type ImportedSource = Pick<AdvisorSource, "title" | "body"> &
   Partial<Pick<AdvisorSource, "kind" | "sourceUrl" | "status" | "extractionNote">>;
 
-const MAX_SOURCE_CHARS = 100_000;
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
@@ -35,7 +37,8 @@ export async function importWebsiteSource(url: string, title?: string): Promise<
   const res = await fetch(url, {
     headers: {
       "user-agent": USER_AGENT,
-      accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+      accept:
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
       "accept-language": "en-US,en;q=0.5",
     },
   });
@@ -46,22 +49,21 @@ export async function importWebsiteSource(url: string, title?: string): Promise<
   const inferredTitle = title || extractTitle(html) || new URL(url).hostname;
 
   // Try SPA-specific extraction first (Inertia, Next.js, etc)
-  let text = extractSpaContent(html);
+  let fullText = extractSpaContent(html);
 
   // Fallback to traditional HTML stripping
-  if (!text || text.length < 200) {
-    text = stripHtml(html);
+  if (!fullText || fullText.length < 200) {
+    fullText = stripHtml(html);
   }
-
-  text = text.slice(0, MAX_SOURCE_CHARS);
 
   return {
     kind: "website",
     title: inferredTitle,
     sourceUrl: url,
-    body: withHeader(inferredTitle, "Website", url, text),
-    status: text.length > 50 ? "ready" : "needs_review",
-    extractionNote: text.length > 50 ? undefined : "Fetched the URL but extracted very little text.",
+    body: withHeader(inferredTitle, "Website", url, fullText),
+    status: fullText.length > 50 ? "ready" : "needs_review",
+    extractionNote:
+      fullText.length > 50 ? undefined : "Fetched the URL but extracted very little text.",
   };
 }
 
@@ -76,7 +78,9 @@ function extractSpaContent(html: string): string | null {
   }
 
   // Next.js
-  const nextMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+  const nextMatch = html.match(
+    /<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/,
+  );
   if (nextMatch) {
     try {
       const json = JSON.parse(nextMatch[1]);
@@ -136,14 +140,15 @@ export async function importYoutubeSource(url: string, title?: string): Promise<
   const inferredTitle = title || (await fetchYoutubeTitle(url)) || "YouTube video";
   try {
     const transcript = await fetchTranscript(url);
-    const text = transcript
+    const fullText = transcript
       .map((item) => `[${formatSeconds(item.offset / 1000)}] ${item.text}`)
       .join("\n");
+
     return {
       kind: "youtube",
       title: inferredTitle,
       sourceUrl: url,
-      body: withHeader(inferredTitle, "YouTube transcript", url, text.slice(0, MAX_SOURCE_CHARS)),
+      body: withHeader(inferredTitle, "YouTube transcript", url, fullText),
       status: "ready",
     };
   } catch (err) {
@@ -173,14 +178,15 @@ export async function importPdfSource(file: File, title?: string): Promise<Impor
   const parser = new PDFParse({ data: buffer });
   try {
     const result = await parser.getText();
-    const text = result.text.trim();
+    const fullText = result.text.trim();
+
     return {
       kind: "pdf",
       title: inferredTitle,
       sourceUrl: file.name,
-      body: withHeader(inferredTitle, "PDF", file.name, text.slice(0, MAX_SOURCE_CHARS)),
-      status: text ? "ready" : "needs_review",
-      extractionNote: text ? undefined : "PDF parsed, but no text was extracted.",
+      body: withHeader(inferredTitle, "PDF", file.name, fullText),
+      status: fullText ? "ready" : "needs_review",
+      extractionNote: fullText ? undefined : "PDF parsed, but no text was extracted.",
     };
   } catch (err) {
     return {
@@ -206,14 +212,15 @@ export async function importDocxSource(file: File, title?: string): Promise<Impo
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
     const result = await mammoth.extractRawText({ buffer });
-    const text = result.value.trim();
+    const fullText = result.value.trim();
+
     return {
       kind: "text",
       title: inferredTitle,
       sourceUrl: file.name,
-      body: withHeader(inferredTitle, "Word (.docx)", file.name, text.slice(0, MAX_SOURCE_CHARS)),
-      status: text ? "ready" : "needs_review",
-      extractionNote: text ? undefined : "Word file parsed, but no text was extracted.",
+      body: withHeader(inferredTitle, "Word (.docx)", file.name, fullText),
+      status: fullText ? "ready" : "needs_review",
+      extractionNote: fullText ? undefined : "Word file parsed, but no text was extracted.",
     };
   } catch (err) {
     return {
