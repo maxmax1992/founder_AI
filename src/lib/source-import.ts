@@ -6,7 +6,7 @@ import { fetchTranscript } from "youtube-transcript";
 import type { AdvisorSource } from "@/lib/types";
 
 // Fix for pdfjs-dist worker in Next.js/Node environment
-if (typeof process !== "undefined" && process.env.NODE_ENV !== "browser") {
+if (typeof process !== "undefined" && (process.env.NODE_ENV as string) !== "browser") {
   try {
     const workerPath = path.resolve(
       process.cwd(),
@@ -95,7 +95,7 @@ function extractSpaContent(html: string): string | null {
  * Heuristically find the "main" content in a large JSON blob by looking for
  * long strings that contain multiple sentences or common content keys.
  */
-function findRichContent(obj: any): string | null {
+function findRichContent(obj: unknown): string | null {
   let best = "";
   const queue = [obj];
   const seen = new Set();
@@ -117,15 +117,16 @@ function findRichContent(obj: any): string | null {
     } else if (typeof current === "object" && current !== null) {
       // Check for specific keys first in this specific object level
       const priorityKeys = ["content", "body", "article", "text", "description"];
+      const currentObj = current as Record<string, unknown>;
       for (const key of priorityKeys) {
-        if (typeof current[key] === "string" && current[key].length > 500) {
-          return current[key];
+        if (typeof currentObj[key] === "string" && currentObj[key].length > 500) {
+          return currentObj[key] as string;
         }
       }
 
-      for (const k in current) {
+      for (const k in currentObj) {
         try {
-          queue.push(current[k]);
+          queue.push(currentObj[k]);
         } catch {
           // Ignore potential getter errors
         }

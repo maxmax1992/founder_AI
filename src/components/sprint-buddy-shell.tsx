@@ -5,7 +5,6 @@ import { DefaultChatTransport, generateId } from "ai";
 import {
   AlertCircle,
   BookOpen,
-  Bot,
   CheckCircle2,
   Circle,
   FileText,
@@ -14,6 +13,8 @@ import {
   Globe,
   ListChecks,
   MessageCircle,
+  Mic,
+  Paperclip,
   PlaySquare,
   Plus,
   Save,
@@ -246,8 +247,8 @@ export function SprintBuddyShell() {
   );
 
   return (
-    <div className="bg-background flex h-dvh w-full overflow-hidden">
-      <aside className="border-sidebar-border bg-sidebar text-sidebar-foreground hidden h-dvh w-[280px] shrink-0 flex-col border-r md:flex">
+    <div className="flex h-dvh w-full overflow-hidden bg-background text-[14px] leading-[1.5] antialiased text-foreground">
+      <aside className="hidden h-dvh w-[272px] shrink-0 flex-col border-r border-line-soft bg-background md:flex min-h-0">
         <Sidebar
           activeTab={activeTab}
           advisors={advisors}
@@ -269,17 +270,35 @@ export function SprintBuddyShell() {
           onModelSettingsChange={(patch) => void updateModelSettings(patch)}
           onTabChange={setActiveTab}
         />
-        <div className="border-border flex h-14 shrink-0 items-center justify-between border-b px-4 md:px-6">
-          <div className="min-w-0">
-            <p className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-              Sprint Buddy
-            </p>
-            <h1 className="truncate text-base font-semibold">
-              {selectedAdvisor ? selectedAdvisor.name : "Choose an advisor"}
-            </h1>
-          </div>
-          {selectedAdvisor && (
-            <div className="bg-brand-muted text-brand-muted-foreground hidden rounded-md px-2.5 py-1 text-xs font-medium md:block">
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-line-soft px-6">
+          {activeTab === "chat" ? (
+            <div className="flex items-center gap-[11px]">
+              <div className="relative grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[radial-gradient(circle_at_35%_30%,oklch(0.62_0.05_60),oklch(0.34_0.03_50))] font-serif text-[16px] italic text-[oklch(0.97_0.02_60/0.95)]">
+                {selectedAdvisor?.name?.[0] || "M"}
+                <div className="absolute bottom-[-1px] right-[-1px] h-2 w-2 rounded-full bg-sage shadow-[0_0_0_2px_var(--bg)]" />
+              </div>
+              <div>
+                <div className="text-[14px] font-medium leading-[1.2] text-foreground">
+                  {selectedAdvisor ? selectedAdvisor.name : "Choose an advisor"}
+                </div>
+                <div className="mt-[2px] font-mono text-[10.5px] text-fg-4 max-w-[240px] truncate">
+                  {selectedAdvisor?.description || "Sprint Buddy Advisor"}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="min-w-0">
+              <p className="text-xs font-mono font-medium tracking-wider uppercase text-fg-4">
+                Sprint Buddy
+              </p>
+              <h1 className="truncate text-base font-semibold text-foreground">
+                {activeTab === "advisor" ? "Advisor Editor" : "Daily Check-ins"}
+              </h1>
+            </div>
+          )}
+
+          {selectedAdvisor && activeTab === "chat" && (
+            <div className="hidden rounded-md bg-panel px-2.5 py-1 text-[11px] font-mono font-medium text-fg-3 md:block">
               {selectedModel?.label ?? "Codex"} ·{" "}
               {settings?.model.reasoningEffort ?? DEFAULT_APP_MODEL_SETTINGS.reasoningEffort}{" "}
               thinking
@@ -288,12 +307,12 @@ export function SprintBuddyShell() {
         </div>
 
         {error && (
-          <div className="border-destructive/20 bg-destructive/10 text-destructive border-b px-4 py-2 text-sm">
+          <div className="border-b border-destructive/20 bg-destructive/10 px-4 py-2 text-sm text-destructive">
             {error}
           </div>
         )}
 
-        <div className="min-h-0 flex-1">
+        <div className="min-h-0 flex-1 flex flex-col">
           {activeTab === "chat" && (
             <BuddyChat key={selectedAdvisor?.id ?? "none"} advisor={selectedAdvisor} />
           )}
@@ -339,30 +358,27 @@ function Sidebar({
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="px-4 pt-4 pb-3">
-        <div className="flex items-center gap-2">
-          <div className="bg-brand text-brand-foreground flex size-7 items-center justify-center rounded-md">
-            <Sparkles className="size-4" />
-          </div>
-          <div>
-            <h1 className="text-sm font-semibold">Sprint Buddy</h1>
-            <p className="text-muted-foreground text-xs">Founder OS prototype</p>
-          </div>
+      <div className="flex items-center gap-[10px] px-5 py-5 pb-[18px]">
+        <div className="grid h-[22px] w-[22px] place-items-center rounded-[6px] bg-brand font-serif text-[14px] italic leading-none text-brand-foreground">
+          s
         </div>
-      </header>
+        <div className="font-sans text-[14px] font-medium tracking-[-0.005em] text-foreground">
+          Sprint Buddy
+        </div>
+      </div>
 
-      <div className="px-3 pb-3">
+      <div className="px-5 pb-[18px]">
         <label
           htmlFor="advisor-select"
-          className="text-muted-foreground mb-1 block text-xs font-medium tracking-wider uppercase"
+          className="mb-[6px] block font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-fg-4"
         >
-          Advisor
+          Active Advisor
         </label>
         <select
           id="advisor-select"
           value={advisorId}
           onChange={(event) => onAdvisorChange(event.target.value)}
-          className="border-border bg-background text-foreground focus-visible:ring-ring/50 h-9 w-full rounded-md border px-2 text-sm outline-none focus-visible:ring-2"
+          className="h-9 w-full rounded-md border border-line-soft bg-background px-2 text-[13px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           {advisors.map((advisor) => (
             <option key={advisor.id} value={advisor.id}>
@@ -372,38 +388,51 @@ function Sidebar({
         </select>
       </div>
 
-      <ModelSettingsControls settings={settings} onChange={onModelSettingsChange} />
+      <hr className="mx-0 my-0 mb-[6px] border-0 border-t border-line-soft" />
 
-      <Separator className="bg-sidebar-border" />
+      <div className="px-[10px] py-[4px]">
+        <div className="flex items-center justify-between px-[10px] py-[14px] pb-[10px] font-mono text-[10px] uppercase tracking-[0.14em] text-fg-4">
+          <span>Navigation</span>
+        </div>
+        <nav className="flex flex-col" aria-label="Main tabs">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => onTabChange(tab.id)}
+                className={cn(
+                  "group relative block w-full rounded-[6px] px-[10px] py-[10px] pb-[11px] text-left transition-colors hover:bg-bg-2 flex items-center gap-3",
+                  activeTab === tab.id && "bg-panel",
+                )}
+              >
+                {activeTab === tab.id && (
+                  <div className="absolute bottom-[14px] left-[-10px] top-[14px] w-[2px] rounded-[1px] bg-brand" />
+                )}
+                <Icon className={cn("size-4 text-fg-3", activeTab === tab.id && "text-brand")} />
+                <span className="text-[13px] leading-[1.4] text-foreground font-sans font-medium">
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+      </div>
 
-      <nav className="flex flex-col gap-1 p-2" aria-label="Main tabs">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => onTabChange(tab.id)}
-              className={cn(
-                "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex h-9 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors",
-                activeTab === tab.id &&
-                  "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
-              )}
-            >
-              <Icon className="size-4" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </nav>
+      <hr className="mx-0 my-0 mb-[6px] border-0 border-t border-line-soft mt-2" />
 
-      <div className="mt-auto p-3">
-        <div className="border-border bg-background rounded-md border p-3">
-          <p className="text-sm font-medium">Privacy stance</p>
-          <p className="text-muted-foreground mt-1 text-xs leading-5">
-            Raw founder chat stays local in this MVP. Organizer signal is intentionally out of
-            scope.
-          </p>
+      <div className="flex-1 overflow-y-auto scrollbar-thin px-[10px] py-[4px]">
+        <ModelSettingsControls settings={settings} onChange={onModelSettingsChange} />
+      </div>
+
+      <div className="mt-auto flex items-center gap-[10px] border-t border-line-soft px-5 py-[14px]">
+        <div className="grid h-7 w-7 place-items-center rounded-full bg-[oklch(0.55_0.06_50)] font-sans text-[12px] font-medium text-[oklch(0.98_0.01_80)]">
+          A
+        </div>
+        <div>
+          <div className="text-[13px] text-foreground">Aino Virtanen</div>
+          <div className="mt-[1px] font-mono text-[10.5px] text-fg-4">Quanta Health</div>
         </div>
       </div>
     </div>
@@ -575,11 +604,10 @@ function BuddyChat({ advisor }: { advisor: Advisor | null }) {
     [advisor?.id],
   );
 
-  const { messages, sendMessage, status, stop, error, regenerate, clearError } =
-    useChat<AppUIMessage>({
-      id: chatId,
-      transport,
-    });
+  const { messages, sendMessage, status, error, regenerate, clearError } = useChat<AppUIMessage>({
+    id: chatId,
+    transport,
+  });
   const [input, setInput] = React.useState("");
   const isBusy = status === "submitted" || status === "streaming";
 
@@ -596,117 +624,381 @@ function BuddyChat({ advisor }: { advisor: Advisor | null }) {
     );
   }
 
+  // Right panel static data as specified
+  const patterns = [
+    {
+      id: "p1",
+      tag: "Recurring · 3 mentions",
+      body: (
+        <>
+          You&apos;ve brought up <em>Henri</em> three times this week, always after 10pm.
+        </>
+      ),
+      foot: "Vision alignment",
+      link: "Dig in →",
+      type: "recurring",
+    },
+    {
+      id: "p2",
+      tag: "Shift",
+      body: (
+        <>Your check-in answers got shorter once Stripe outreach started. Not bad — just noting.</>
+      ),
+      foot: "May 19 → 26",
+      link: "Timeline →",
+      type: "shift",
+    },
+    {
+      id: "p3",
+      tag: "Blind spot",
+      body: (
+        <>You ask about pricing a lot. You haven&apos;t actually changed your price in six weeks.</>
+      ),
+      foot: "Action gap",
+      link: "Why? →",
+      type: "warn",
+    },
+  ];
+
+  const genius = [
+    { label: "Invention", value: 92, dim: false },
+    { label: "Tenacity", value: 84, dim: false },
+    { label: "Wonder", value: 71, dim: false },
+    { label: "Discernment", value: 48, dim: true },
+    { label: "Galvanizing", value: 38, dim: true },
+    { label: "Enablement", value: 22, dim: true },
+  ];
+
+  const upcoming = [
+    { date: "28", day: "Wed", title: "1:1 with Mårten — in person", sub: "A-Grid · 14:30" },
+    {
+      date: "29",
+      day: "Thu",
+      title: "Module 9 · Pricing under uncertainty",
+      sub: "Self-paced · ~40 min",
+    },
+    { date: "30", day: "Fri", title: "Peer sync · cohort triad", sub: "Aino, Lasse, Otto" },
+  ];
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="mx-auto flex min-h-full w-full max-w-[820px] flex-col px-5 py-8">
-          {messages.length === 0 ? (
-            <div className="m-auto w-full max-w-[620px] text-center">
-              <div className="border-border mx-auto mb-6 flex size-12 items-center justify-center rounded-full border">
-                <Bot className="text-brand size-5" />
+    <div className="flex h-full min-h-0 flex-1 flex-row">
+      <div className="flex flex-col flex-1 min-w-0">
+        <ScrollArea className="min-h-0 flex-1 pt-8 pb-5">
+          <div className="mx-auto flex w-full max-w-[680px] flex-col gap-[26px] px-6">
+            {messages.length === 0 ? (
+              <div className="m-auto w-full max-w-[500px] text-center pt-20">
+                <h2 className="text-2xl font-serif italic text-foreground mb-4">
+                  How can I help you today?
+                </h2>
+                <div className="grid gap-2 text-left">
+                  {[
+                    "I need to have a hard conversation with my co-founder tomorrow.",
+                    "I feel like I am losing confidence after a bad pitch.",
+                    "Should I pivot or keep pushing this idea?",
+                  ].map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      onClick={() => submit(prompt)}
+                      className="border border-line-soft hover:bg-panel rounded-[10px] px-4 py-3 text-[14px] text-fg-2 transition-colors text-left"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <h2 className="text-2xl font-semibold">Talk to Sprint Buddy</h2>
-              <p className="text-muted-foreground mt-2 text-sm">
-                The answer uses {advisor.name}&apos;s wiki, skills, vision, and concise founder
-                memory.
-              </p>
-              <div className="mt-8 grid gap-2 text-left">
-                {[
-                  "I need to have a hard conversation with my co-founder tomorrow.",
-                  "I feel like I am losing confidence after a bad pitch.",
-                  "Should I pivot or keep pushing this idea?",
-                ].map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    onClick={() => submit(prompt)}
-                    className="border-border hover:bg-muted rounded-md border px-4 py-3 text-sm transition-colors"
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <MessageList messages={messages} />
-          )}
-        </div>
-      </ScrollArea>
-      {error && (
-        <div className="mx-auto w-full max-w-[820px] px-5">
-          <div className="border-destructive/20 bg-destructive/10 text-destructive flex items-center justify-between rounded-md border px-3 py-2 text-sm">
-            <span>{error.message}</span>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                clearError();
-                void regenerate();
-              }}
-            >
-              Retry
-            </Button>
+            ) : (
+              <MessageList messages={messages} advisor={advisor} />
+            )}
           </div>
-        </div>
-      )}
-      <div className="mx-auto w-full max-w-[820px] px-5 pt-3 pb-5">
-        <form
-          className="border-border bg-background flex items-end gap-2 rounded-xl border p-2 shadow-sm"
-          onSubmit={(event) => {
-            event.preventDefault();
-            submit();
-          }}
-        >
-          <Textarea
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            placeholder={`Ask ${advisor.name} about what you are facing...`}
-            className="min-h-10 flex-1 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
+        </ScrollArea>
+        {error && (
+          <div className="mx-auto w-full max-w-[680px] px-6">
+            <div className="flex items-center justify-between rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <span>{error.message}</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  clearError();
+                  void regenerate();
+                }}
+              >
+                Retry
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div className="border-t border-line-soft px-6 pt-4 pb-5">
+          <div className="mx-auto max-w-[680px]">
+            <div className="mb-2.5 flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => submit("Help me write the opening sentence")}
+                className="rounded-full border border-line-soft px-[10px] py-[5px] text-[11.5px] text-fg-3 transition-all hover:border-line hover:text-foreground"
+              >
+                Help me write the opening sentence
+              </button>
+              <button
+                type="button"
+                onClick={() => submit("What if he gets defensive?")}
+                className="rounded-full border border-line-soft px-[10px] py-[5px] text-[11.5px] text-fg-3 transition-all hover:border-line hover:text-foreground"
+              >
+                What if he gets defensive?
+              </button>
+              <button
+                type="button"
+                onClick={() => submit("I'm too tired to do this tonight")}
+                className="rounded-full border border-line-soft px-[10px] py-[5px] text-[11.5px] text-fg-3 transition-all hover:border-line hover:text-foreground"
+              >
+                I&apos;m too tired to do this tonight
+              </button>
+            </div>
+            <form
+              className="rounded-[10px] border border-line-soft bg-bg-2 px-3 pt-3 pb-2 transition-all focus-within:border-line"
+              onSubmit={(event) => {
                 event.preventDefault();
                 submit();
-              }
-            }}
-          />
-          <Button type="button" variant="ghost" size="icon" onClick={stop} disabled={!isBusy}>
-            <Circle className="size-4" />
-          </Button>
-          <Button type="submit" size="icon" disabled={!input.trim() || isBusy}>
-            <Send className="size-4" />
-          </Button>
-        </form>
+              }}
+            >
+              <Textarea
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                placeholder={`Tell ${advisor.name} what's actually going on…`}
+                className="w-full min-h-[22px] max-h-[160px] resize-none border-0 bg-transparent p-0 font-sans text-[14.5px] leading-[1.55] text-foreground outline-none placeholder:text-fg-4 shadow-none focus-visible:ring-0"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    submit();
+                  }
+                }}
+              />
+              <div className="mt-1.5 flex items-center justify-between">
+                <div className="flex gap-[2px]">
+                  <button
+                    type="button"
+                    className="grid h-[30px] w-[30px] place-items-center rounded-[6px] text-fg-3 hover:bg-panel hover:text-foreground"
+                    title="Attach"
+                  >
+                    <Paperclip className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    className="grid h-[30px] w-[30px] place-items-center rounded-[6px] text-fg-3 hover:bg-panel hover:text-foreground"
+                    title="Voice"
+                  >
+                    <Mic className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-[10px]">
+                  <span className="font-mono text-[10px] tracking-[0.08em] text-fg-4">private</span>
+                  <button
+                    type="submit"
+                    disabled={!input.trim() || isBusy}
+                    className="grid h-7 w-7 place-items-center rounded-[6px] bg-brand text-brand-foreground transition-all hover:bg-[oklch(0.58_0.14_50)] active:scale-[0.96] disabled:bg-line disabled:text-fg-4 disabled:cursor-not-allowed"
+                  >
+                    <Send className="h-3.5 w-3.5 ml-0.5" />
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
       </div>
+
+      <aside className="hidden lg:block w-[320px] overflow-y-auto border-l border-line-soft pb-6 scrollbar-thin scrollbar-thumb-line scrollbar-track-transparent flex-shrink-0 bg-background">
+        <div className="border-b border-line-soft px-5 pt-5 pb-3.5">
+          <h2 className="m-0 text-[14px] font-medium text-foreground">What buddy noticed</h2>
+          <div className="mt-1 font-mono text-[10.5px] text-fg-4">7 days · only you see this</div>
+        </div>
+
+        {patterns.map((p) => (
+          <div key={p.id} className="border-b border-line-soft px-5 py-3.5">
+            <div className="flex items-center gap-[7px] font-mono text-[10px] uppercase tracking-[0.12em] text-fg-4">
+              <span
+                className={cn(
+                  "h-[5px] w-[5px] rounded-full",
+                  p.type === "recurring"
+                    ? "bg-brand"
+                    : p.type === "shift"
+                      ? "bg-sage"
+                      : "bg-[oklch(0.58_0.16_25)]",
+                )}
+              />
+              {p.tag}
+            </div>
+            <div className="mt-1.5 font-serif text-[16px] leading-[1.35] text-foreground">
+              {p.body}
+            </div>
+            <div className="mt-2 flex items-center justify-between font-mono text-[10.5px] text-fg-4">
+              <span>{p.foot}</span>
+              <a href={`#${p.id}`} className="text-fg-2 no-underline hover:text-foreground">
+                {p.link}
+              </a>
+            </div>
+          </div>
+        ))}
+
+        <div className="border-b border-line-soft px-5 pt-[18px] pb-4">
+          <div className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-fg-4">
+            Working Genius
+          </div>
+          <div className="text-[13.5px] leading-[1.4] text-foreground">
+            Leads with <em className="font-serif text-[16px] italic text-foreground">Invention</em>{" "}
+            & <em className="font-serif text-[16px] italic text-foreground">Tenacity</em>
+          </div>
+          <div className="mt-3 grid gap-[7px]">
+            {genius.map((g) => (
+              <div
+                key={g.label}
+                className={cn(
+                  "grid grid-cols-[80px_1fr_24px] items-center gap-[10px] font-mono text-[10.5px]",
+                  g.dim ? "text-fg-4" : "text-fg-3",
+                )}
+              >
+                <span>{g.label}</span>
+                <div className="h-[2px] w-full overflow-hidden rounded-[1px] bg-line-soft">
+                  <div
+                    className={cn("h-full rounded-[1px]", g.dim ? "bg-line" : "bg-brand")}
+                    style={{ width: `${g.value}%` }}
+                  />
+                </div>
+                <div className={cn("text-right font-tnum", g.dim ? "text-fg-4" : "text-fg-2")}>
+                  {g.value}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="px-5 pt-4">
+          <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-fg-4">
+            Up next
+          </div>
+          {upcoming.map((u) => (
+            <div
+              key={u.date + u.title}
+              className="grid grid-cols-[44px_1fr] gap-3 border-t border-line-soft py-[11px] first:border-t-0"
+            >
+              <div className="pt-px font-mono text-[10px] uppercase tracking-[0.08em] text-fg-4 leading-[1.2]">
+                {u.day}
+                <strong className="mt-0.5 block font-serif text-[18px] font-normal tracking-[-0.01em] text-foreground italic-0">
+                  {u.date}
+                </strong>
+              </div>
+              <div>
+                <div className="text-[13px] leading-[1.4] text-foreground">{u.title}</div>
+                <div className="mt-[3px] font-mono text-[10.5px] text-fg-4">{u.sub}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </aside>
     </div>
   );
 }
 
-function MessageList({ messages }: { messages: AppUIMessage[] }) {
+function MessageList({ messages, advisor }: { messages: AppUIMessage[]; advisor: Advisor | null }) {
   return (
-    <div className="flex flex-col gap-6">
+    <>
       {messages.map((message) => (
-        <div
-          key={message.id}
-          className={cn("flex gap-3", message.role === "user" ? "justify-end" : "justify-start")}
-        >
-          {message.role === "assistant" && (
-            <div className="border-border flex size-8 shrink-0 items-center justify-center rounded-md border">
-              <Bot className="text-brand size-4" />
-            </div>
-          )}
+        <div key={message.id} className="flex gap-[14px]">
           <div
             className={cn(
-              "max-w-[min(720px,85%)] rounded-xl px-4 py-3",
+              "grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full font-sans text-[11px] font-medium leading-none",
               message.role === "user"
-                ? "border-brand/20 bg-brand-muted text-brand-muted-foreground border"
-                : "border-border bg-card border",
+                ? "bg-[oklch(0.55_0.06_50)] text-[oklch(0.98_0.01_80)]"
+                : "bg-[radial-gradient(circle_at_35%_30%,oklch(0.62_0.05_60),oklch(0.34_0.03_50))] font-serif text-[14px] italic text-[oklch(0.97_0.02_60/0.95)]",
             )}
           >
-            <MessageParts message={message} />
+            {message.role === "user" ? "A" : advisor?.name?.[0] || "M"}
+          </div>
+          <div className="min-w-0 flex-1 pt-[2px]">
+            <div className="mb-1.5 flex items-center gap-2 font-mono text-[10.5px] text-fg-4">
+              <span
+                className={cn(
+                  message.role === "user" ? "text-fg-2" : "text-foreground font-medium",
+                )}
+              >
+                {message.role === "user" ? "You" : advisor?.name || "Mårten"}
+              </span>
+              <span>·</span>
+              <span>
+                {new Date().toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: false,
+                })}
+              </span>
+            </div>
+            <div
+              className={cn(
+                "text-pretty text-[14.5px] leading-[1.6]",
+                message.role === "user" ? "text-fg-2" : "text-foreground",
+              )}
+            >
+              <MessageParts message={message} />
+            </div>
           </div>
         </div>
       ))}
-    </div>
+
+      {/* Inline check-in card mockup for end of chat if last message was assistant */}
+      {messages.length > 0 && messages[messages.length - 1].role === "assistant" && (
+        <div className="flex gap-[14px]">
+          <div className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full bg-brand font-sans text-[12px] text-brand-foreground">
+            ✦
+          </div>
+          <div className="min-w-0 flex-1 pt-[2px]">
+            <div className="mb-1.5 flex items-center gap-2 font-mono text-[10.5px] text-fg-4">
+              <span className="text-brand">Check-in</span>
+              <span>·</span>
+              <span>2 of 3</span>
+              <span>·</span>
+              <span>private to you</span>
+            </div>
+            <div className="rounded-[10px] border border-line-soft bg-bg-2 px-[18px] py-4 pb-[15px]">
+              <div className="mb-[10px] flex items-center justify-between">
+                <div className="flex items-center gap-[7px] font-mono text-[10px] uppercase tracking-[0.14em] text-brand before:h-[5px] before:w-[5px] before:rounded-full before:bg-brand">
+                  The uncomfortable one
+                </div>
+                <button type="button" className="font-mono text-[10.5px] text-fg-4 hover:text-fg-2">
+                  skip
+                </button>
+              </div>
+              <div className="font-serif text-[22px] tracking-[-0.005em] leading-[1.25] text-foreground">
+                What are you <em>pretending</em> not to know?
+              </div>
+              <div className="mt-2 text-[12.5px] leading-[1.5] text-fg-3">
+                One sentence is enough. No one sees this but you and the buddy.
+              </div>
+              <div className="mt-3.5 flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  className="rounded-full border border-line-soft bg-transparent px-[11px] py-[6px] text-[12px] text-fg-2 transition-all hover:border-line hover:text-foreground"
+                >
+                  Type it
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-line-soft bg-transparent px-[11px] py-[6px] text-[12px] text-fg-2 transition-all hover:border-line hover:text-foreground"
+                >
+                  <Mic className="h-[11px] w-[11px] text-fg-3" />
+                  Speak
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full border border-line-soft bg-transparent px-[11px] py-[6px] text-[12px] text-fg-2 transition-all hover:border-line hover:text-foreground"
+                >
+                  Ask me something easier
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -723,7 +1015,7 @@ function MessageParts({ message }: { message: AppUIMessage }) {
           key={`${message.id}-text-${textPartCount}`}
           text={part.text}
           isStreaming={"state" in part && part.state === "streaming"}
-          className={message.role === "user" ? "text-brand-muted-foreground" : undefined}
+          className={message.role === "user" ? "text-fg-2" : undefined}
         />
       );
     }
@@ -735,7 +1027,7 @@ function MessageParts({ message }: { message: AppUIMessage }) {
           ? part.toolCallId
           : String(toolPartCount);
       return (
-        <div key={`${message.id}-${type}-${toolCallKey}`} className="text-muted-foreground text-xs">
+        <div key={`${message.id}-${type}-${toolCallKey}`} className="text-fg-4 text-xs font-mono">
           {type.replaceAll("-", " ")}
         </div>
       );
@@ -745,7 +1037,7 @@ function MessageParts({ message }: { message: AppUIMessage }) {
       return (
         <div
           key={`${message.id}-error-${errorPartCount}`}
-          className="border-destructive/20 bg-destructive/10 text-destructive rounded-md border px-3 py-2 text-sm"
+          className="border border-destructive/20 bg-destructive/10 text-destructive rounded-md px-3 py-2 text-sm"
         >
           {String(part.errorText)}
         </div>
@@ -1467,7 +1759,7 @@ function SkillCreatorDialog({
                     Ask for a focused advisor skill draft from the attached context.
                   </p>
                 ) : (
-                  <MessageList messages={messages} />
+                  <MessageList messages={messages} advisor={null} />
                 )}
               </div>
               <form
@@ -1690,7 +1982,7 @@ function SourcesEditor({
       formData.set("title", title);
       if (kind === "text") formData.set("body", body);
       if (kind === "website" || kind === "youtube") formData.set("url", url);
-      if ((kind === "pdf" || kind === "docx") && file) formData.set("file", file);
+      if ((kind === "pdf" || (kind as string) === "docx") && file) formData.set("file", file);
 
       const source = await postSourceImport(formData);
       clearImportFields();
@@ -1910,7 +2202,7 @@ function SourcesEditor({
                     key={option.id}
                     type="button"
                     onClick={() => {
-                      setKind(option.id);
+                      setKind(option.id as SourceKind);
                       setImportError(null);
                     }}
                     className={cn(
@@ -2107,7 +2399,7 @@ function WorkshopChat({ advisor }: { advisor: Advisor }) {
             Ask for source distillation, vision refinement, wiki page drafts, or advisor skills.
           </p>
         ) : (
-          <MessageList messages={messages} />
+          <MessageList messages={messages} advisor={null} />
         )}
       </div>
       <form
