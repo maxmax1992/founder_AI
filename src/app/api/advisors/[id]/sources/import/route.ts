@@ -1,6 +1,7 @@
 import { errorJson } from "@/lib/http";
 import {
   buildTextSource,
+  importDocxSource,
   importPdfSource,
   importWebsiteSource,
   importYoutubeSource,
@@ -32,8 +33,10 @@ export async function POST(req: Request, { params }: Params) {
         : kind === "youtube"
           ? await importYoutubeSource(requireUrl(url), title)
           : kind === "pdf"
-            ? await importPdfSource(requireFile(file), title)
-            : buildTextSource(title, body);
+            ? await importPdfSource(requireFile(file, "pdf"), title)
+            : kind === "docx"
+              ? await importDocxSource(requireFile(file, "docx"), title)
+              : buildTextSource(title, body);
 
     if (!imported.body.trim()) {
       return errorJson("bad_request", "Source content is empty");
@@ -59,10 +62,20 @@ function requireUrl(url: string) {
   }
 }
 
-function requireFile(file: FormDataEntryValue | null) {
-  if (!(file instanceof File)) throw new Error("PDF file is required");
-  if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
-    throw new Error("Only PDF files are supported for PDF source import");
+function requireFile(file: FormDataEntryValue | null, type: "pdf" | "docx") {
+  if (!(file instanceof File)) throw new Error(`${type.toUpperCase()} file is required`);
+  const lowerName = file.name.toLowerCase();
+  if (type === "pdf") {
+    if (!lowerName.endsWith(".pdf") && file.type !== "application/pdf") {
+      throw new Error("Only PDF files are supported for PDF source import");
+    }
+  } else if (type === "docx") {
+    if (
+      !lowerName.endsWith(".docx") &&
+      file.type !== "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ) {
+      throw new Error("Only .docx files are supported for Word source import");
+    }
   }
   return file;
 }

@@ -1,3 +1,4 @@
+import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
 import { fetchTranscript } from "youtube-transcript";
 
@@ -106,6 +107,37 @@ export async function importPdfSource(file: File, title?: string): Promise<Impor
     };
   } finally {
     await parser.destroy();
+  }
+}
+
+export async function importDocxSource(file: File, title?: string): Promise<ImportedSource> {
+  const inferredTitle = title || file.name.replace(/\.docx$/i, "") || "Word source";
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const result = await mammoth.extractRawText({ buffer });
+    const text = result.value.trim();
+    return {
+      kind: "text",
+      title: inferredTitle,
+      sourceUrl: file.name,
+      body: withHeader(inferredTitle, "Word (.docx)", file.name, text.slice(0, MAX_SOURCE_CHARS)),
+      status: text ? "ready" : "needs_review",
+      extractionNote: text ? undefined : "Word file parsed, but no text was extracted.",
+    };
+  } catch (err) {
+    return {
+      kind: "text",
+      title: inferredTitle,
+      sourceUrl: file.name,
+      body: withHeader(
+        inferredTitle,
+        "Word (.docx)",
+        file.name,
+        "Word upload was captured, but automatic text extraction failed. Paste selected excerpts here before distilling into the advisor wiki.",
+      ),
+      status: "needs_review",
+      extractionNote: err instanceof Error ? err.message : "Word extraction failed.",
+    };
   }
 }
 

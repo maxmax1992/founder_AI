@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   Circle,
   FileText,
+  Folder,
+  FolderPlus,
   Globe,
   ListChecks,
   MessageCircle,
@@ -67,7 +69,7 @@ const tabs: Array<{
 type SourceKind = NonNullable<AdvisorSource["kind"]>;
 
 const sourceKindOptions: Array<{
-  id: SourceKind;
+  id: SourceKind | "docx";
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
@@ -75,6 +77,7 @@ const sourceKindOptions: Array<{
   { id: "website", label: "Website", icon: Globe },
   { id: "youtube", label: "YouTube", icon: PlaySquare },
   { id: "pdf", label: "PDF", icon: Upload },
+  { id: "docx", label: "Word", icon: FileText },
 ];
 
 const textFileExtensions = [".txt", ".md", ".markdown", ".csv", ".json"];
@@ -100,6 +103,13 @@ function titleFromFile(file: File) {
 
 function isPdfFile(file: File) {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function isDocxFile(file: File) {
+  return (
+    file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    file.name.toLowerCase().endsWith(".docx")
+  );
 }
 
 function isTextLikeFile(file: File) {
@@ -1659,7 +1669,7 @@ function SourcesEditor({
       formData.set("title", title);
       if (kind === "text") formData.set("body", body);
       if (kind === "website" || kind === "youtube") formData.set("url", url);
-      if (kind === "pdf" && file) formData.set("file", file);
+      if ((kind === "pdf" || kind === "docx") && file) formData.set("file", file);
 
       const source = await postSourceImport(formData);
       clearImportFields();
@@ -1679,13 +1689,17 @@ function SourcesEditor({
       if (isPdfFile(droppedFile)) {
         formData.set("kind", "pdf");
         formData.set("file", droppedFile);
+      } else if (isDocxFile(droppedFile)) {
+        formData.set("kind", "docx");
+        formData.set("file", droppedFile);
       } else if (isTextLikeFile(droppedFile)) {
         const text = await droppedFile.text();
         if (!text.trim()) throw new Error(`${droppedFile.name} is empty.`);
         formData.set("kind", "text");
         formData.set("body", text);
       } else {
-        throw new Error(`${droppedFile.name} is not a supported source file.`);
+        // Skip unsupported files instead of throwing error for bulk uploads
+        continue;
       }
       imported.push(await postSourceImport(formData));
     }
@@ -1756,7 +1770,7 @@ function SourcesEditor({
     try {
       const imported = await importDroppedFiles(files);
       const latest = imported.at(-1);
-      if (!latest) throw new Error("Choose a PDF, text file, or markdown file.");
+      if (!latest) throw new Error("Choose a PDF, Word, text, or markdown file.");
       clearImportFields();
       setDropStatus(
         imported.length === 1 ? "Source imported." : `${imported.length} sources imported.`,
@@ -1764,6 +1778,29 @@ function SourcesEditor({
       await onImported(latest);
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "Failed to import selected files");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const importLocalDirectory = async () => {
+    const dir = prompt("Enter a directory path relative to project root (e.g. 'marten'):");
+    if (!dir) return;
+
+    setIsImporting(true);
+    setImportError(null);
+    setDropStatus(null);
+    try {
+      const res = await fetch(`/api/advisors/${advisorId}/sources/local-import`, {
+        method: "POST",
+        body: JSON.stringify({ dirPath: dir }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || "Failed to import from local directory");
+      setDropStatus(data.message);
+      await onImported(null as unknown as AdvisorSource); // Trigger refresh
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Failed to import from local directory");
     } finally {
       setIsImporting(false);
     }
@@ -1781,40 +1818,68 @@ function SourcesEditor({
       <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
         <div className="space-y-3">
           <div className="border-border bg-background rounded-md border p-3">
-            <label
-              onDragEnter={(event) => {
-                event.preventDefault();
-                setIsDragActive(true);
-              }}
-              onDragOver={(event) => {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "copy";
-                setIsDragActive(true);
-              }}
-              onDragLeave={handleDragLeave}
-              onDrop={(event) => void handleDrop(event)}
-              className={cn(
-                "border-border bg-muted/20 hover:bg-muted focus-within:ring-ring/50 mb-3 flex min-h-24 w-full cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-3 py-4 text-center transition-colors focus-within:ring-2",
-                isDragActive && "border-brand bg-brand-muted text-brand",
-              )}
-            >
-              <input
-                type="file"
-                multiple
-                accept="application/pdf,.pdf,.txt,.md,.markdown,.csv,.json,text/*"
-                className="hidden"
-                onChange={(event) => {
-                  const pickedFiles = Array.from(event.currentTarget.files ?? []);
-                  event.currentTarget.value = "";
-                  void handlePickedFiles(pickedFiles);
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              <label
+                onDragEnter={(event) => {
+                  event.preventDefault();
+                  setIsDragActive(true);
                 }}
-              />
-              <Upload className="mb-2 size-5" />
-              <p className="text-sm font-medium">Drop or choose sources</p>
-              <p className="text-muted-foreground mt-1 max-w-[240px] text-xs leading-5">
-                PDF, text, markdown, website URL, or YouTube URL
-              </p>
-            </label>
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "copy";
+                  setIsDragActive(true);
+                }}
+                onDragLeave={handleDragLeave}
+                onDrop={(event) => void handleDrop(event)}
+                className={cn(
+                  "border-border bg-muted/20 hover:bg-muted focus-within:ring-ring/50 flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-3 py-4 text-center transition-colors focus-within:ring-2",
+                  isDragActive && "border-brand bg-brand-muted text-brand",
+                )}
+              >
+                <input
+                  type="file"
+                  multiple
+                  accept="application/pdf,.pdf,.docx,.txt,.md,.markdown,.csv,.json,text/*"
+                  className="hidden"
+                  onChange={(event) => {
+                    const pickedFiles = Array.from(event.currentTarget.files ?? []);
+                    event.currentTarget.value = "";
+                    void handlePickedFiles(pickedFiles);
+                  }}
+                />
+                <Upload className="mb-2 size-5" />
+                <p className="text-xs font-medium">Files</p>
+              </label>
+
+              <label className="border-border bg-muted/20 hover:bg-muted focus-within:ring-ring/50 flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-3 py-4 text-center transition-colors focus-within:ring-2">
+                <input
+                  type="file"
+                  // @ts-expect-error webkitdirectory is non-standard
+                  webkitdirectory=""
+                  directory=""
+                  multiple
+                  className="hidden"
+                  onChange={(event) => {
+                    const pickedFiles = Array.from(event.currentTarget.files ?? []);
+                    event.currentTarget.value = "";
+                    void handlePickedFiles(pickedFiles);
+                  }}
+                />
+                <Folder className="mb-2 size-5" />
+                <p className="text-xs font-medium">Folder</p>
+              </label>
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="mb-3 w-full border-dashed"
+              onClick={importLocalDirectory}
+              disabled={isImporting}
+            >
+              <FolderPlus className="mr-2 size-4" />
+              Import from project directory
+            </Button>
 
             <div className="grid grid-cols-2 gap-1">
               {sourceKindOptions.map((option) => {
