@@ -45,6 +45,7 @@ export interface AdvisorBrain {
   vision: string;
   direction: string;
   memory: string;
+  graph: string;
   wikiPages: BrainPage[];
   skills: BrainPage[];
 }
@@ -78,7 +79,7 @@ export interface CheckinItem {
 }
 
 export interface SearchHit {
-  source: "profile" | "vision" | "direction" | "memory" | "wiki" | "skill" | "source";
+  source: "profile" | "vision" | "direction" | "memory" | "graph" | "wiki" | "skill" | "source";
   slug: string;
   title: string;
   excerpt: string;
@@ -185,6 +186,7 @@ export const UpdateBrainBodySchema = z.object({
   vision: z.string(),
   direction: z.string(),
   memory: z.string(),
+  graph: z.string().optional().default(""),
   wikiPages: z.array(
     z.object({
       slug: z.string().min(1).max(100),

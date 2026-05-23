@@ -12,8 +12,10 @@ import {
   Globe,
   ListChecks,
   MessageCircle,
+  Network,
   PlaySquare,
   Plus,
+  RotateCcw,
   Save,
   Send,
   Sparkles,
@@ -21,6 +23,8 @@ import {
   Upload,
   UserCog,
   X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import * as React from "react";
 import { Button } from "@/components/ui/button";
@@ -77,6 +81,30 @@ const sourceKindOptions: Array<{
   { id: "pdf", label: "PDF", icon: Upload },
 ];
 
+type AdvisorGraphNodeKind = "core" | "source" | "wiki" | "skill" | "concept";
+
+interface AdvisorGraphNode {
+  id: string;
+  title: string;
+  kind: AdvisorGraphNodeKind;
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface AdvisorGraphEdge {
+  from: string;
+  to: string;
+  label: string;
+}
+
+interface AdvisorGraphModel {
+  nodes: AdvisorGraphNode[];
+  edges: AdvisorGraphEdge[];
+}
+
 const textFileExtensions = [".txt", ".md", ".markdown", ".csv", ".json"];
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
@@ -115,6 +143,215 @@ function firstUsefulDroppedLine(value: string) {
       .map((line) => line.trim())
       .find((line) => line && !line.startsWith("#")) ?? ""
   );
+}
+
+function compactText(value: string, max = 420) {
+  const clean = value.replace(/\s+/g, " ").trim();
+  if (!clean) return "No text captured yet.";
+  return clean.length > max ? `${clean.slice(0, max - 1)}...` : clean;
+}
+
+function compactLabel(value: string, max = 28) {
+  const clean = value.replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  return `${clean.slice(0, max - 1)}...`;
+}
+
+function prettyGraphRef(value: string) {
+  return value
+    .replace(/^(source|wiki|skill):/, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function distribute(index: number, count: number, start: number, end: number) {
+  if (count <= 1) return (start + end) / 2;
+  return start + (index * (end - start)) / (count - 1);
+}
+
+function graphNodeIdForRef(value: string) {
+  const clean = value
+    .replace(/[`[\]]/g, "")
+    .trim()
+    .toLowerCase();
+  if (clean.startsWith("source:") || clean.startsWith("wiki:") || clean.startsWith("skill:")) {
+    return clean;
+  }
+  const aliases: Record<string, string> = {
+    "advisor responses": "advisor-responses",
+    "advisor response": "advisor-responses",
+    "advisor wiki": "advisor-wiki",
+    "buddy chat": "buddy-chat",
+    "founder memory": "founder-memory",
+    "founder-memory": "founder-memory",
+    "graphify brain": "graphify-brain",
+    "graphify-brain": "graphify-brain",
+    "response behavior": "response-behavior",
+    "response-behavior": "response-behavior",
+  };
+  return aliases[clean] ?? slugify(clean);
+}
+
+function buildAdvisorGraphModel(brain: AdvisorBrain, sources: AdvisorSource[]): AdvisorGraphModel {
+  const nodes = new Map<string, AdvisorGraphNode>();
+  const edges: AdvisorGraphEdge[] = [];
+
+  const addNode = (node: Omit<AdvisorGraphNode, "width" | "height">) => {
+    nodes.set(node.id, {
+      width: node.kind === "source" ? 148 : 132,
+      height: 42,
+      ...node,
+    });
+  };
+
+  addNode({
+    id: "graphify-brain",
+    title: "Graphify Brain",
+    kind: "core",
+    text: brain.graph,
+    x: 500,
+    y: 305,
+  });
+  addNode({
+    id: "profile",
+    title: "Profile",
+    kind: "core",
+    text: brain.profile,
+    x: 360,
+    y: 185,
+  });
+  addNode({ id: "vision", title: "Vision", kind: "core", text: brain.vision, x: 500, y: 145 });
+  addNode({
+    id: "direction",
+    title: "Direction",
+    kind: "core",
+    text: brain.direction,
+    x: 640,
+    y: 185,
+  });
+  addNode({
+    id: "founder-memory",
+    title: "Founder Memory",
+    kind: "core",
+    text: brain.memory,
+    x: 360,
+    y: 425,
+  });
+  addNode({
+    id: "advisor-wiki",
+    title: "Advisor Wiki",
+    kind: "concept",
+    text: `${brain.wikiPages.length} curated wiki pages synthesize advisor source claims for founder-facing use.`,
+    x: 710,
+    y: 305,
+  });
+  addNode({
+    id: "buddy-chat",
+    title: "Buddy Chat",
+    kind: "concept",
+    text: "Buddy Chat uses the advisor brain, wiki pages, skills, and Graphify Brain map to answer founder questions.",
+    x: 830,
+    y: 420,
+  });
+  addNode({
+    id: "advisor-responses",
+    title: "Advisor Responses",
+    kind: "concept",
+    text: "The final answer surface shaped by profile, vision, direction, memory, skills, and source-backed wiki context.",
+    x: 830,
+    y: 185,
+  });
+  addNode({
+    id: "response-behavior",
+    title: "Response Behavior",
+    kind: "concept",
+    text: "Repeatable coaching behavior supplied by advisor skills.",
+    x: 640,
+    y: 505,
+  });
+
+  sources.slice(0, 12).forEach((source, index, visibleSources) => {
+    addNode({
+      id: `source:${source.id}`.toLowerCase(),
+      title: source.title,
+      kind: "source",
+      text: `${source.kind ?? "text"} source, ${source.status ?? "ready"}.\n\n${source.body}`,
+      x: 160,
+      y: distribute(index, visibleSources.length, 115, 515),
+    });
+  });
+
+  brain.wikiPages.slice(0, 12).forEach((page, index, visiblePages) => {
+    addNode({
+      id: `wiki:${page.slug}`.toLowerCase(),
+      title: page.title,
+      kind: "wiki",
+      text: page.content,
+      x: 860,
+      y: distribute(index, visiblePages.length, 85, 315),
+    });
+  });
+
+  brain.skills.slice(0, 10).forEach((page, index, visiblePages) => {
+    addNode({
+      id: `skill:${page.slug}`.toLowerCase(),
+      title: page.title,
+      kind: "skill",
+      text: page.content,
+      x: distribute(index, visiblePages.length, 365, 575),
+      y: 565,
+    });
+  });
+
+  for (const line of brain.graph.split(/\r?\n/)) {
+    const match = line.match(/^-\s+(.+?)\s+->\s+(.+?)\s+->\s+(.+)$/);
+    if (!match) continue;
+    const from = graphNodeIdForRef(match[1]);
+    const label = match[2].trim();
+    const to = graphNodeIdForRef(match[3]);
+    if (!nodes.has(from)) {
+      addNode({
+        id: from,
+        title: prettyGraphRef(from),
+        kind: "concept",
+        text: `Concept node discovered in Graphify Brain relationship: ${match[1].trim()}.`,
+        x: 500,
+        y: 455,
+      });
+    }
+    if (!nodes.has(to)) {
+      addNode({
+        id: to,
+        title: prettyGraphRef(to),
+        kind: "concept",
+        text: `Concept node discovered in Graphify Brain relationship: ${match[3].trim()}.`,
+        x: 700,
+        y: 455,
+      });
+    }
+    edges.push({ from, to, label });
+  }
+
+  if (edges.length === 0) {
+    edges.push(
+      { from: "profile", label: "grounds", to: "advisor-responses" },
+      { from: "vision", label: "sets outcome", to: "advisor-responses" },
+      { from: "direction", label: "constrains", to: "advisor-responses" },
+      { from: "founder-memory", label: "personalizes", to: "advisor-responses" },
+      { from: "graphify-brain", label: "maps", to: "advisor-wiki" },
+      { from: "advisor-wiki", label: "informs", to: "buddy-chat" },
+    );
+  }
+
+  const dedupedEdges = Array.from(
+    new Map(
+      edges
+        .filter((edge) => nodes.has(edge.from) && nodes.has(edge.to))
+        .map((edge) => [`${edge.from}|${edge.label}|${edge.to}`, edge]),
+    ).values(),
+  );
+
+  return { nodes: Array.from(nodes.values()), edges: dedupedEdges };
 }
 
 function parseDroppedUrl(value: string) {
@@ -576,8 +813,8 @@ function BuddyChat({ advisor }: { advisor: Advisor | null }) {
               </div>
               <h2 className="text-2xl font-semibold">Talk to Sprint Buddy</h2>
               <p className="text-muted-foreground mt-2 text-sm">
-                The answer uses {advisor.name}&apos;s wiki, skills, vision, and concise founder
-                memory.
+                The answer uses {advisor.name}&apos;s graph, wiki, skills, vision, and concise
+                founder memory.
               </p>
               <div className="mt-8 grid gap-2 text-left">
                 {[
@@ -948,6 +1185,14 @@ function AdvisorWorkspace({
     setStatus("Brain saved to markdown files.");
   };
 
+  const refreshGraphifyBrain = async () => {
+    const data = await jsonFetch<AdvisorBrainResponse>(`/api/advisors/${advisor.id}/graphify`, {
+      method: "POST",
+    });
+    setBrain(data.brain);
+    setStatus("Graphify Brain refreshed from current sources, wiki, and skills.");
+  };
+
   const deleteCurrentAdvisor = async () => {
     await jsonFetch(`/api/advisors/${advisor.id}`, { method: "DELETE" });
     await onAdvisorDeleted();
@@ -1054,6 +1299,30 @@ function AdvisorWorkspace({
           </EditorCard>
         </section>
 
+        <section className="border-border bg-card rounded-lg border p-3">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Network className="text-brand size-4" />
+              <h3 className="text-sm font-semibold">Graphify Brain</h3>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={refreshGraphifyBrain}>
+              <Sparkles className="size-4" />
+              Refresh graph
+            </Button>
+          </div>
+          <GraphifyBrainView brain={brain} sources={sources} />
+          <div className="mt-3 grid gap-2">
+            <div className="text-muted-foreground text-xs uppercase tracking-wide">
+              Markdown backing store
+            </div>
+            <Textarea
+              value={brain.graph}
+              onChange={(event) => setBrain({ ...brain, graph: event.target.value })}
+              className="min-h-52 font-mono text-sm"
+            />
+          </div>
+        </section>
+
         <PageCollectionEditor
           title="Advisor Wiki"
           pages={brain.wikiPages}
@@ -1095,7 +1364,7 @@ function AdvisorWorkspace({
           }}
         />
 
-        <WorkshopChat advisor={advisor} />
+        <WorkshopChat advisor={advisor} onAdvisorUpdated={load} />
         <SkillCreatorDialog
           advisor={advisor}
           open={isSkillCreatorOpen}
@@ -1513,6 +1782,313 @@ function uniquePageSlug(base: string, pages: BrainPage[]) {
     index += 1;
   }
   return candidate;
+}
+
+function GraphifyBrainView({ brain, sources }: { brain: AdvisorBrain; sources: AdvisorSource[] }) {
+  const graph = React.useMemo(() => buildAdvisorGraphModel(brain, sources), [brain, sources]);
+  const [selectedNodeId, setSelectedNodeId] = React.useState("graphify-brain");
+  const [zoom, setZoom] = React.useState(0.88);
+  const [pan, setPan] = React.useState({ x: 0, y: 0 });
+  const [dragStart, setDragStart] = React.useState<{
+    pointerId: number;
+    x: number;
+    y: number;
+    panX: number;
+    panY: number;
+  } | null>(null);
+  const viewportRef = React.useRef<HTMLDivElement>(null);
+
+  const selectedNode =
+    graph.nodes.find((node) => node.id === selectedNodeId) ??
+    graph.nodes.find((node) => node.id === "graphify-brain") ??
+    graph.nodes[0];
+  const edgeNodeIds = React.useMemo(
+    () =>
+      new Set(
+        selectedNode
+          ? graph.edges
+              .filter((edge) => edge.from === selectedNode.id || edge.to === selectedNode.id)
+              .flatMap((edge) => [edge.from, edge.to])
+          : [],
+      ),
+    [graph.edges, selectedNode],
+  );
+  const relatedEdges = selectedNode
+    ? graph.edges.filter((edge) => edge.from === selectedNode.id || edge.to === selectedNode.id)
+    : [];
+
+  const setBoundedZoom = (next: number) => setZoom(Math.min(1.8, Math.max(0.52, next)));
+
+  const resetView = () => {
+    setZoom(0.88);
+    setPan({ x: 0, y: 0 });
+    setSelectedNodeId("graphify-brain");
+  };
+
+  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (!event.ctrlKey && Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
+    event.preventDefault();
+    const direction = event.deltaY > 0 ? -0.08 : 0.08;
+    setBoundedZoom(zoom + direction);
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragStart({
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      panX: pan.x,
+      panY: pan.y,
+    });
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragStart || event.pointerId !== dragStart.pointerId) return;
+    setPan({
+      x: dragStart.panX + event.clientX - dragStart.x,
+      y: dragStart.panY + event.clientY - dragStart.y,
+    });
+  };
+
+  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (dragStart?.pointerId === event.pointerId) setDragStart(null);
+  };
+
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+
+  return (
+    <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="min-w-0">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="text-muted-foreground text-xs">
+            {graph.nodes.length} nodes · {graph.edges.length} links
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Zoom out graph"
+              onClick={() => setBoundedZoom(zoom - 0.12)}
+            >
+              <ZoomOut className="size-4" />
+            </Button>
+            <span className="text-muted-foreground w-12 text-center text-xs tabular-nums">
+              {Math.round(zoom * 100)}%
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Zoom in graph"
+              onClick={() => setBoundedZoom(zoom + 0.12)}
+            >
+              <ZoomIn className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Reset graph view"
+              onClick={resetView}
+            >
+              <RotateCcw className="size-4" />
+            </Button>
+          </div>
+        </div>
+        <section
+          ref={viewportRef}
+          aria-label="Zoomable Graphify Brain node map"
+          className="border-border bg-background relative h-[460px] overflow-hidden rounded-md border"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onWheel={handleWheel}
+          style={{
+            touchAction: "none",
+            backgroundImage:
+              "linear-gradient(to right, color-mix(in oklab, var(--border) 45%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in oklab, var(--border) 45%, transparent) 1px, transparent 1px)",
+            backgroundSize: "28px 28px",
+          }}
+        >
+          <div
+            className="absolute left-1/2 top-1/2 h-[620px] w-[1000px] origin-center transition-transform duration-100"
+            style={{
+              transform: `translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px)) scale(${zoom})`,
+            }}
+          >
+            <svg
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 h-full w-full"
+              viewBox="0 0 1000 620"
+            >
+              <defs>
+                <marker
+                  id="graph-arrow"
+                  markerHeight="8"
+                  markerWidth="8"
+                  orient="auto"
+                  refX="7"
+                  refY="4"
+                >
+                  <path d="M0,0 L8,4 L0,8 Z" className="fill-muted-foreground/45" />
+                </marker>
+              </defs>
+              {graph.edges.map((edge) => {
+                const from = nodeById.get(edge.from);
+                const to = nodeById.get(edge.to);
+                if (!from || !to) return null;
+                const active =
+                  selectedNode && (edge.from === selectedNode.id || edge.to === selectedNode.id);
+                const midX = (from.x + to.x) / 2;
+                const midY = (from.y + to.y) / 2;
+                return (
+                  <g key={`${edge.from}-${edge.label}-${edge.to}`}>
+                    <line
+                      x1={from.x}
+                      x2={to.x}
+                      y1={from.y}
+                      y2={to.y}
+                      className={cn("stroke-muted-foreground/25", active && "stroke-brand/70")}
+                      markerEnd="url(#graph-arrow)"
+                      strokeWidth={active ? 2.4 : 1.3}
+                    />
+                    {active && (
+                      <text
+                        x={midX}
+                        y={midY - 8}
+                        textAnchor="middle"
+                        className="fill-muted-foreground text-[11px]"
+                      >
+                        {compactLabel(edge.label, 18)}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
+            {graph.nodes.map((node) => {
+              const selected = selectedNode?.id === node.id;
+              const related = edgeNodeIds.has(node.id);
+              return (
+                <button
+                  key={node.id}
+                  type="button"
+                  data-graph-node={node.id}
+                  className={cn(
+                    "absolute z-10 grid place-items-center rounded-md border px-2 text-center text-[11px] leading-tight shadow-sm transition",
+                    "hover:z-10 hover:shadow-md focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand",
+                    node.kind === "core" && "border-brand/50 bg-brand/12 text-foreground",
+                    node.kind === "source" &&
+                      "border-amber-400/45 bg-amber-500/12 text-amber-950 dark:text-amber-100",
+                    node.kind === "wiki" &&
+                      "border-cyan-400/45 bg-cyan-500/12 text-cyan-950 dark:text-cyan-100",
+                    node.kind === "skill" &&
+                      "border-rose-400/45 bg-rose-500/12 text-rose-950 dark:text-rose-100",
+                    node.kind === "concept" && "border-border bg-card text-foreground",
+                    selected && "z-20 scale-105 ring-2 ring-brand",
+                    !selected && selectedNode && !related && "opacity-55",
+                  )}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSelectedNodeId(node.id);
+                  }}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                    setSelectedNodeId(node.id);
+                  }}
+                  onMouseDown={(event) => {
+                    event.stopPropagation();
+                    setSelectedNodeId(node.id);
+                  }}
+                  style={{
+                    height: node.height,
+                    left: node.x - node.width / 2,
+                    top: node.y - node.height / 2,
+                    width: node.width,
+                  }}
+                >
+                  {compactLabel(node.title)}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+
+      <aside className="border-border bg-background rounded-md border p-3">
+        {selectedNode ? (
+          <div className="grid gap-3">
+            <div>
+              <div className="text-muted-foreground mb-1 text-xs uppercase tracking-wide">
+                {selectedNode.kind}
+              </div>
+              <h4 className="text-sm font-semibold">{selectedNode.title}</h4>
+            </div>
+            <p className="text-muted-foreground text-sm leading-6">
+              {compactText(selectedNode.text)}
+            </p>
+            <Separator />
+            <div className="grid gap-2">
+              <div className="text-muted-foreground text-xs uppercase tracking-wide">Links</div>
+              {relatedEdges.length > 0 ? (
+                relatedEdges.slice(0, 8).map((edge) => {
+                  const otherId = edge.from === selectedNode.id ? edge.to : edge.from;
+                  const other = nodeById.get(otherId);
+                  return (
+                    <button
+                      key={`${edge.from}-${edge.label}-${edge.to}`}
+                      type="button"
+                      className="border-border hover:bg-muted grid gap-0.5 rounded-md border p-2 text-left transition"
+                      onClick={() => setSelectedNodeId(otherId)}
+                    >
+                      <span className="text-xs font-medium">
+                        {edge.from === selectedNode.id ? "Out" : "In"} · {edge.label}
+                      </span>
+                      <span className="text-muted-foreground text-xs">
+                        {other?.title ?? prettyGraphRef(otherId)}
+                      </span>
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="text-muted-foreground text-sm">No graph links yet.</p>
+              )}
+            </div>
+            <Separator />
+            <div className="grid gap-2">
+              <div className="text-muted-foreground text-xs uppercase tracking-wide">Nodes</div>
+              <div className="max-h-44 space-y-1 overflow-auto pr-1">
+                {graph.nodes.map((node) => (
+                  <button
+                    key={node.id}
+                    type="button"
+                    data-graph-node-list={node.id}
+                    className={cn(
+                      "hover:bg-muted flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs transition",
+                      selectedNode.id === node.id && "bg-muted text-foreground",
+                    )}
+                    onClick={() => setSelectedNodeId(node.id)}
+                    onFocus={() => setSelectedNodeId(node.id)}
+                    onMouseDown={() => setSelectedNodeId(node.id)}
+                    onPointerDown={() => setSelectedNodeId(node.id)}
+                  >
+                    <span className="truncate">{node.title}</span>
+                    <span className="text-muted-foreground shrink-0 uppercase">{node.kind}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-sm">Select a node to inspect its text.</p>
+        )}
+      </aside>
+    </div>
+  );
 }
 
 function EditorCard({ title, children }: { title: string; children: React.ReactNode }) {
@@ -1990,7 +2566,13 @@ function SourcesEditor({
   );
 }
 
-function WorkshopChat({ advisor }: { advisor: Advisor }) {
+function WorkshopChat({
+  advisor,
+  onAdvisorUpdated,
+}: {
+  advisor: Advisor;
+  onAdvisorUpdated: () => void | Promise<void>;
+}) {
   const transport = React.useMemo(
     () =>
       new DefaultChatTransport<AppUIMessage>({ api: `/api/advisors/${advisor.id}/workshop-chat` }),
@@ -2002,6 +2584,15 @@ function WorkshopChat({ advisor }: { advisor: Advisor }) {
   });
   const [input, setInput] = React.useState("");
   const busy = status === "submitted" || status === "streaming";
+  const previousStatus = React.useRef(status);
+
+  React.useEffect(() => {
+    const wasBusy =
+      previousStatus.current === "submitted" || previousStatus.current === "streaming";
+    if (wasBusy && status === "ready") void onAdvisorUpdated();
+    previousStatus.current = status;
+  }, [onAdvisorUpdated, status]);
+
   const submit = () => {
     const trimmed = input.trim();
     if (!trimmed || busy) return;
@@ -2013,12 +2604,13 @@ function WorkshopChat({ advisor }: { advisor: Advisor }) {
     <section className="border-border bg-card rounded-lg border p-3">
       <div className="mb-3 flex items-center gap-2">
         <Sparkles className="text-brand size-4" />
-        <h3 className="text-sm font-semibold">Advisor Brain Workshop</h3>
+        <h3 className="text-sm font-semibold">Advisor Agentic Editor</h3>
       </div>
       <div className="border-border bg-background max-h-[420px] overflow-auto rounded-md border p-3">
         {messages.length === 0 ? (
           <p className="text-muted-foreground text-sm">
-            Ask for source distillation, vision refinement, wiki page drafts, or advisor skills.
+            Ask it to update advisor context, refresh Graphify Brain, draft wiki pages, or add
+            skills.
           </p>
         ) : (
           <MessageList messages={messages} />
@@ -2034,7 +2626,7 @@ function WorkshopChat({ advisor }: { advisor: Advisor }) {
         <Input
           value={input}
           onChange={(event) => setInput(event.target.value)}
-          placeholder="Example: turn my sources into wiki pages and skills"
+          placeholder="Example: refresh the graph and update direction from the sources"
         />
         <Button type="submit" disabled={!input.trim() || busy}>
           <Send className="size-4" />

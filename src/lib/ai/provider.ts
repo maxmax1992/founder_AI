@@ -123,12 +123,41 @@ export function getCodexProviderOptions(): SharedV3ProviderOptions {
   return getCodexProviderOptionsFor(storedModelSettings());
 }
 
-export function getCodexModelSettings() {
+function mergeCodexAppServerSettings(
+  base: CodexAppServerSettings,
+  extra?: Partial<CodexAppServerSettings>,
+): CodexAppServerSettings {
+  if (!extra) return base;
+  return {
+    ...base,
+    ...extra,
+    configOverrides:
+      base.configOverrides || extra.configOverrides
+        ? { ...(base.configOverrides ?? {}), ...(extra.configOverrides ?? {}) }
+        : undefined,
+    mcpServers:
+      base.mcpServers || extra.mcpServers
+        ? { ...(base.mcpServers ?? {}), ...(extra.mcpServers ?? {}) }
+        : undefined,
+    serverRequests:
+      base.serverRequests || extra.serverRequests
+        ? { ...(base.serverRequests ?? {}), ...(extra.serverRequests ?? {}) }
+        : undefined,
+  };
+}
+
+export function getCodexModelSettings(options?: {
+  codexAppServerSettings?: Partial<CodexAppServerSettings>;
+}) {
   const settings = storedModelSettings();
+  const appServerSettings = mergeCodexAppServerSettings(
+    codexAppServerSettings(settings),
+    options?.codexAppServerSettings,
+  );
   return {
     model:
       providerMode() === "codex-cli"
-        ? codexAppServerProvider(codexCliModelId(settings), codexAppServerSettings(settings))
+        ? codexAppServerProvider(codexCliModelId(settings), appServerSettings)
         : providerMode() === "gateway"
           ? gateway(gatewayModelId(settings))
           : openai(openAIModelId(settings)),

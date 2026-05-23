@@ -66,6 +66,7 @@ function defaultBrain(advisorName = "Marten Mickos"): AdvisorBrain {
       "# Direction\n\n- Be concise and direct.\n- Name the real issue before giving advice.\n- Ask one uncomfortable but useful question.\n- End with one next action the founder can take within 24 hours.\n- Do not fabricate advisor-specific frameworks when the wiki is empty.",
     memory:
       "# Founder Memory\n\nConcise pattern memory from Buddy Chat will appear here. Keep it short, private, and action-oriented.",
+    graph: defaultGraphifyBrain(advisorName),
     wikiPages: [
       {
         slug: "sprint-buddy-challenge",
@@ -85,6 +86,29 @@ function defaultBrain(advisorName = "Marten Mickos"): AdvisorBrain {
       },
     ],
   };
+}
+
+function defaultGraphifyBrain(advisorName: string) {
+  return `# Graphify Brain
+
+Machine-readable advisor map for ${advisorName}. Refresh this from the Advisor Editor after adding sources, wiki pages, or skills.
+
+## Role In The LLM Wiki
+
+- Raw source material stays in Sources.
+- Graphify Brain is the machine-readable map of entities, source claims, wiki pages, skills, and their relationships.
+- Advisor Wiki remains the curated founder-facing layer.
+
+## Current Graph
+
+- Sources: none captured yet.
+- Wiki pages: starter pages only.
+- Skills: starter skills only.
+
+## Refresh Rule
+
+Use the Graphify refresh action or the advisor editor agent before relying on advisor-specific graph claims.
+`;
 }
 
 async function exists(filePath: string): Promise<boolean> {
@@ -192,6 +216,8 @@ async function ensureAdvisorFiles(advisor: Advisor, brain = defaultBrain(advisor
     await writeText(path.join(dir, "direction.md"), brain.direction);
   if (!(await exists(path.join(dir, "memory.md"))))
     await writeText(path.join(dir, "memory.md"), brain.memory);
+  if (!(await exists(path.join(dir, "graph.md"))))
+    await writeText(path.join(dir, "graph.md"), brain.graph || defaultGraphifyBrain(advisor.name));
   if ((await readPageDir(path.join(dir, "wiki"))).length === 0) {
     await writePageDir(path.join(dir, "wiki"), brain.wikiPages);
   }
@@ -209,6 +235,7 @@ async function writeAdvisorBrain(advisorId: string, brain: AdvisorBrain) {
   await writeText(path.join(dir, "vision.md"), brain.vision);
   await writeText(path.join(dir, "direction.md"), brain.direction);
   await writeText(path.join(dir, "memory.md"), brain.memory);
+  await writeText(path.join(dir, "graph.md"), brain.graph || defaultGraphifyBrain(advisorId));
   await writePageDir(path.join(dir, "wiki"), brain.wikiPages);
   await writePageDir(path.join(dir, "skills"), brain.skills);
 }
@@ -299,6 +326,7 @@ export async function getAdvisorBrain(advisorId: string): Promise<AdvisorBrain |
     vision: await readText(path.join(dir, "vision.md")),
     direction: await readText(path.join(dir, "direction.md")),
     memory: await readText(path.join(dir, "memory.md")),
+    graph: await readText(path.join(dir, "graph.md"), defaultGraphifyBrain(advisor.name)),
     wikiPages: await readPageDir(path.join(dir, "wiki")),
     skills: await readPageDir(path.join(dir, "skills")),
   };
@@ -510,6 +538,7 @@ export async function searchAdvisorBrain(advisorId: string, query: string): Prom
     { source: "vision", slug: "vision", title: "Vision", text: brain.vision },
     { source: "direction", slug: "direction", title: "Direction", text: brain.direction },
     { source: "memory", slug: "memory", title: "Founder Memory", text: brain.memory },
+    { source: "graph", slug: "graph", title: "Graphify Brain", text: brain.graph },
     ...brain.wikiPages.map((page) => ({
       source: "wiki" as const,
       slug: page.slug,
@@ -552,6 +581,7 @@ export async function readAdvisorPage(advisorId: string, slug: string) {
     { slug: "vision", title: "Vision", content: brain.vision },
     { slug: "direction", title: "Direction", content: brain.direction },
     { slug: "memory", title: "Founder Memory", content: brain.memory },
+    { slug: "graph", title: "Graphify Brain", content: brain.graph },
     ...brain.wikiPages,
     ...brain.skills,
     ...sources.map((source) => ({ slug: source.id, title: source.title, content: source.body })),

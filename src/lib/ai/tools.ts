@@ -7,7 +7,7 @@ export function advisorTools(advisorId: string) {
   return {
     searchAdvisorWiki: tool({
       description:
-        "Search the selected advisor brain across profile, vision, direction, memory, wiki pages, skills, and sources.",
+        "Search the selected advisor brain across profile, vision, direction, memory, graphify brain, wiki pages, skills, and sources.",
       inputSchema: z.object({
         query: z.string().min(1),
       }),
@@ -15,7 +15,7 @@ export function advisorTools(advisorId: string) {
     }),
     readAdvisorPage: tool({
       description:
-        "Read one full advisor page by slug. Use slugs returned by searchAdvisorWiki or known slugs like profile, vision, direction, memory.",
+        "Read one full advisor page by slug. Use slugs returned by searchAdvisorWiki or known slugs like profile, vision, direction, memory, graph.",
       inputSchema: z.object({
         slug: z.string().min(1),
       }),

@@ -62,6 +62,10 @@ layers:
 - **Graphify** owns machine extraction. It scans the active source folder,
   extracts entities and relationships, detects communities, and can generate
   graph/wiki starter pages.
+- **Advisor Graphify Brain** owns the selected-advisor machine map. In Sprint
+  Buddy this is `data/advisors/<advisorId>/graph.md`: a concise markdown graph
+  of the advisor's sources, wiki pages, skills, and relationships that Buddy
+  Chat and the editor can read before making advisor-specific claims.
 - **The LLM Wiki** owns the curated human layer. The LLM turns graphify output
   into stable advisor pages, founder-facing summaries, contradictions, source
   citations, and decision-ready synthesis.
@@ -79,6 +83,8 @@ wiki/
   index.md          # content-oriented catalog
   log.md            # chronological append-only activity log
 graphify-out/       # generated graphify output
+data/advisors/*/
+  graph.md          # per-advisor Graphify Brain used by chat/editor prompts
 tools/
   wiki_sources.py   # add/edit/remove/list source CLI
 ```
@@ -90,6 +96,19 @@ python3 tools/wiki_sources.py add ./path/to/source.pdf --title "Marten talk note
 python3 tools/wiki_sources.py list
 graphify sources/active --update --wiki --obsidian --obsidian-dir wiki
 ```
+
+Inside Sprint Buddy, refresh the selected advisor's local map from the Advisor
+Editor with `Refresh graph`, or ask the Advisor Agentic Editor to refresh it.
+That route rebuilds `graph.md` from current advisor sources, wiki pages, and
+skills through the local advisor MCP server. The project-level graphify command
+still remains the broader corpus refresh for `sources/active`, `wiki/`, and
+`graphify-out/`.
+
+The Advisor Editor also renders this `graph.md` as a zoomable node graph, similar
+to Obsidian's graph view. Nodes are derived from sources, advisor wiki pages,
+skills, and core relationship lines. Selecting a node opens an inspector with
+the backing text and related links while the markdown remains editable below as
+the source of truth.
 
 When a source should no longer affect answers:
 

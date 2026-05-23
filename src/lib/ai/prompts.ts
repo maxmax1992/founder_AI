@@ -32,6 +32,9 @@ ${brain.direction}
 # Founder Memory
 ${brain.memory}
 
+# Graphify Brain
+${brain.graph}
+
 ${renderPages("Advisor Wiki", brain.wikiPages)}
 
 ${renderPages("Advisor Skills", brain.skills)}
@@ -48,6 +51,7 @@ ${
 
 # Response Policy
 - If the advisor wiki is thin, say what is missing instead of inventing advisor-specific advice.
+- Use Graphify Brain as the map of source/wiki/skill relationships before making advisor-specific claims.
 - Name the real issue in one concise sentence.
 - Reflect relevant founder history when it helps.
 - Apply one advisor principle or skill from the wiki when available.
@@ -76,6 +80,9 @@ ${brain.vision}
 ## Direction
 ${brain.direction}
 
+## Graphify Brain
+${brain.graph}
+
 ${renderPages("Wiki Pages", brain.wikiPages, 6000)}
 
 ${renderPages("Skills", brain.skills, 6000)}
@@ -97,11 +104,22 @@ Guide the user through:
 3. Draft or refine advisor direction.
 4. Propose wiki pages.
 5. Propose skills.
+6. Refresh or update Graphify Brain so the advisor has a machine-readable map of sources, wiki pages, and skills.
+
+# Advisor Editor Save Commands
+The host can execute direct save commands through the local advisor_editor MCP server before this model runs:
+- "refresh the Graphify Brain"
+- "update advisor profile to ..."
+- "update advisor vision to ..."
+- "update advisor direction to ..."
+- "update advisor memory to ..."
+- "update advisor graph to ..."
 
 Important:
 - If a source is marked needs_review, ask the user to verify or edit it before treating it as authoritative.
-- Do not claim you saved changes.
-- Provide copy-ready markdown drafts and tell the user which editor field they should paste or update.`;
+- If the host already saved a direct command, the response will say so. If not, draft the exact update text and ask the user to confirm the direct save command.
+- If you only drafted text and did not call a saving tool, do not claim you saved changes.
+- Keep edits small and refresh Graphify Brain after changing source-derived wiki or skill context.`;
 }
 
 export function fallbackBuddyAnswer(userText: string, advisor: Advisor, brain: AdvisorBrain) {
@@ -129,6 +147,7 @@ For ${advisor.name}, use this editing workflow:
 3. Write direction as answer rules.
 4. Create one wiki page per framework, story, or principle.
 5. Create one skill per repeatable coaching behavior.
+6. Refresh Graphify Brain from the Advisor Editor.
 
 Copy-ready starter:
 
