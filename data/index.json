@@ -1,0 +1,175 @@
+{
+  "version": 1,
+  "advisors": [
+    {
+      "id": "marten-mickos",
+      "name": "Marten Mickos",
+      "description": "Aalto Founder School advisor voice for Founder's harness.",
+      "createdAt": 1779601007815,
+      "updatedAt": 1779601007815
+    }
+  ],
+  "founders": [
+    {
+      "id": "local-founder",
+      "name": "Local Founder",
+      "createdAt": 1779601007815,
+      "updatedAt": 1779601201287
+    }
+  ],
+  "conversations": [
+    {
+      "id": "mtUs8LSoJv5O41vK",
+      "advisorId": "marten-mickos",
+      "founderId": "local-founder",
+      "title": "hi",
+      "createdAt": 1779601080769,
+      "updatedAt": 1779601080769
+    },
+    {
+      "id": "bpn1MjR4rY9WDyx0",
+      "advisorId": "marten-mickos",
+      "founderId": "local-founder",
+      "title": "tell me how to raise funding",
+      "createdAt": 1779601104103,
+      "updatedAt": 1779601201282
+    }
+  ],
+  "messages": [
+    {
+      "id": "SPSCBE8xvlJsvNWd",
+      "conversationId": "mtUs8LSoJv5O41vK",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "hi"
+        }
+      ],
+      "createdAt": 1779601080769
+    },
+    {
+      "id": "d6OTeqv4N8JKCrpg",
+      "conversationId": "mtUs8LSoJv5O41vK",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "text",
+          "text": "The real issue seems to be deciding what truth needs to be faced before the next founder move.\n\nI am using Advisor: Marten Mickos and Founder: Local Founder, but live Codex credentials are not configured. Run `codex login` for Codex CLI SSO or configure a direct API key.\n\nAdvisor lens: - Be concise and direct..\n\nFounder context: Concise pattern memory from Founder's Chat will appear here. Keep it short, private, and action-oriented.\n\nFallback skill consulted: graph_fallback; references used: .skills/graph_fallback/SKILL.md.\n\nHard question: what are you avoiding saying out loud because it might force a decision?\n\nNext action: write the one sentence version of the conversation you need to have, then send a message today to schedule it.\n\nYour note: \"hi\"",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779601080769
+    },
+    {
+      "id": "cHNfkvUeOmC4v4Fg",
+      "conversationId": "bpn1MjR4rY9WDyx0",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "tell me how to raise funding"
+        }
+      ],
+      "createdAt": 1779601104103
+    },
+    {
+      "id": "PMjr1VTSc10OT0gx",
+      "conversationId": "bpn1MjR4rY9WDyx0",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "text",
+          "text": "The real issue seems to be deciding what truth needs to be faced before the next founder move.\n\nI am using Advisor: Marten Mickos and Founder: Local Founder, but live Codex credentials are not configured. Run `codex login` for Codex CLI SSO or configure a direct API key.\n\nAdvisor lens: - Be concise and direct..\n\nFounder context: Concise pattern memory from Founder's Chat will appear here. Keep it short, private, and action-oriented.\n\nFallback skill consulted: graph_fallback; references used: graph_fallback.\n\nHard question: what are you avoiding saying out loud because it might force a decision?\n\nNext action: write the one sentence version of the conversation you need to have, then send a message today to schedule it.\n\nYour note: \"tell me how to raise funding\"",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779601201282
+    },
+    {
+      "id": "dRIWruhZva9ktS7t",
+      "conversationId": "bpn1MjR4rY9WDyx0",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "how to raise funding"
+        }
+      ],
+      "createdAt": 1779601201282
+    },
+    {
+      "id": "",
+      "conversationId": "bpn1MjR4rY9WDyx0",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "reasoning",
+          "text": "",
+          "providerMetadata": {
+            "openai": {
+              "itemId": "rs_0aab5c1e28abf135006a128f2740d881988b5c1399cef2d2b2",
+              "reasoningEncryptedContent": null
+            }
+          },
+          "state": "done"
+        },
+        {
+          "type": "text",
+          "text": "The real issue: you’re asking “how to raise funding,” but investors fund evidence, not ambition.\n\nA simple fundraising path:\n\n1. **Decide if you should raise now**\n   - Raise if capital clearly accelerates something already working.\n   - Do not raise just because you are unsure what to build, sell, or prioritize.\n\n2. **Get your proof sharp**\n   Investors look for:\n   - A painful customer problem\n   - A specific target customer\n   - Evidence people want it: revenue, pilots, LOIs, waitlist, usage, retention, strong customer quotes\n   - A team that can execute unusually well\n\n3. **Create a tight story**\n   Your pitch should answer:\n   - What problem are you solving?\n   - Why now?\n   - Why this customer?\n   - Why you?\n   - What traction proves this matters?\n   - How much are you raising and what milestone will it buy?\n\n4. **Build a target investor list**\n   Start with 30–50 relevant angels, operators, micro-VCs, or seed funds.\n   Prioritize people who invest in your sector, stage, geography, or customer type.\n\n5. **Use warm intros, but don’t hide behind them**\n   Ask founders, advisors, customers, or operators for intros.\n   If needed, send a short cold email with traction and a clear ask.\n\n6. **Run the process tightly**\n   - Schedule many conversations in a short window.\n   - Create urgency without lying.\n   - Track every investor: contacted, meeting, follow-up, partner meeting, committed, passed.\n   - Ask for a clear next step after every call.\n\n7. **Close around a concrete round**\n   Example: “We’re raising €500k to reach €20k MRR / launch with 10 design partners / complete regulated pilot within 12 months.”\n\nUncomfortable question: **what evidence do you have today that strangers urgently want this, not just that you believe it should exist?**\n\nNext action within 24 hours: write a one-page fundraising memo with: problem, customer, traction, round size, use of funds, and 20 target investors.\n\nFallback skill consulted: graph_fallback; references used: advisor direction, advisor wiki challenge pages, founder memory/graph.",
+          "providerMetadata": {
+            "openai": {
+              "itemId": "msg_0aab5c1e28abf135006a128f28a2a881989d3ddac6bdfad384",
+              "phase": "final_answer"
+            }
+          },
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779601201282
+    }
+  ],
+  "checkins": [
+    {
+      "id": "Te4GjAKhBkZvKqwV",
+      "advisorId": "marten-mickos",
+      "title": "Avoided conversation",
+      "prompt": "What conversation are you avoiding, and what is the smallest honest opening sentence?",
+      "status": "todo",
+      "createdAt": 1779601064702,
+      "dueAt": 1779773864702
+    },
+    {
+      "id": "f1TxnsS38AZYH5aJ",
+      "advisorId": "marten-mickos",
+      "title": "Signal or noise",
+      "prompt": "What founder worry repeated today? Mark whether it is a real signal, noise, or unknown.",
+      "status": "todo",
+      "createdAt": 1779601064702,
+      "dueAt": 1779773864702
+    },
+    {
+      "id": "RQM4znSootkrFeCW",
+      "advisorId": "marten-mickos",
+      "title": "Next hard action",
+      "prompt": "Choose one action you can take within 24 hours that would reduce ambiguity.",
+      "status": "todo",
+      "createdAt": 1779601064702,
+      "dueAt": 1779773864702
+    }
+  ],
+  "settings": {
+    "model": {
+      "model": "gpt-5.5",
+      "reasoningEffort": "medium",
+      "textVerbosity": "medium",
+      "openAIApiKey": "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"
+    },
+    "checkins": {
+      "intervalDays": 2
+    }
+  }
+}

@@ -9,7 +9,7 @@
 /build
 
 # local runtime data
-/data/
+# /data/ (uncommented for hackathon deployment)
 
 # env
 .env*

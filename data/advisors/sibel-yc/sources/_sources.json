@@ -1,0 +1,62 @@
+[
+  {
+    "id": "yc-guide-to-seed-fundraising-2",
+    "advisorId": "sibel-yc",
+    "title": "YC Guide to Seed Fundraising",
+    "kind": "pdf",
+    "sourceUrl": "YC Guide to Seed Fundraising.pdf",
+    "status": "ready",
+    "createdAt": 1779519079861,
+    "updatedAt": 1779519079861
+  },
+  {
+    "id": "startup-experts-reveal-their-top-productivity-advice",
+    "advisorId": "sibel-yc",
+    "title": "Startup Experts Reveal Their Top Productivity Advice",
+    "kind": "youtube",
+    "sourceUrl": "https://www.youtube.com/watch?v=nF_YWdz6S0Y",
+    "status": "ready",
+    "createdAt": 1779519267644,
+    "updatedAt": 1779519267644
+  },
+  {
+    "id": "the-biggest-mistakes-first-time-founders-make-michael-seibel",
+    "advisorId": "sibel-yc",
+    "title": "The Biggest Mistakes First-Time Founders Make - Michael Seibel",
+    "kind": "youtube",
+    "sourceUrl": "https://www.youtube.com/watch?v=D56QeyyQMLI",
+    "status": "ready",
+    "createdAt": 1779519323320,
+    "updatedAt": 1779519323320
+  },
+  {
+    "id": "yc-s-essential-startup-advice-yc-startup-library-y-combinator-2",
+    "advisorId": "sibel-yc",
+    "title": "YC's essential startup advice  : YC Startup Library | Y Combinator",
+    "kind": "website",
+    "sourceUrl": "https://www.ycombinator.com/library/4D-yc-s-essential-startup-advice",
+    "status": "ready",
+    "createdAt": 1779519537066,
+    "updatedAt": 1779519537066
+  },
+  {
+    "id": "yc-guide-to-seed-fundraising",
+    "advisorId": "sibel-yc",
+    "title": "YC Guide to Seed Fundraising",
+    "kind": "pdf",
+    "sourceUrl": "YC Guide to Seed Fundraising.pdf",
+    "status": "ready",
+    "createdAt": 1779520128599,
+    "updatedAt": 1779520128599
+  },
+  {
+    "id": "the-best-way-to-launch-your-startup-startup-school",
+    "advisorId": "sibel-yc",
+    "title": "The Best Way To Launch Your Startup | Startup School",
+    "kind": "youtube",
+    "sourceUrl": "https://www.youtube.com/watch?v=u36A-YTxiOw",
+    "status": "ready",
+    "createdAt": 1779520191560,
+    "updatedAt": 1779520191560
+  }
+]
