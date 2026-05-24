@@ -50,7 +50,7 @@ Source statuses:
 2. Run graphify on the active corpus:
 
    ```bash
-   graphify sources/active --update --wiki --obsidian --obsidian-dir wiki
+   python3 -m graphify extract sources/active --out .
    ```
 
 3. Read `graphify-out/GRAPH_REPORT.md` and the generated wiki/community pages.
@@ -67,3 +67,21 @@ founder-facing knowledge artifact.
 
 When the user types `/graphify`, invoke the graphify skill before doing anything
 else. If no path is given, use the repository root.
+
+## graphify
+
+This project has a graphify knowledge graph at graphify-out/.
+
+This machine may have Graphify installed as a Python module while the `graphify`
+entrypoint is outside `PATH`. Prefer `python3 -m graphify ...` unless
+`command -v graphify` succeeds. For the app viewer, refresh the graph with:
+
+```bash
+python3 tools/graphify_refresh.py
+```
+
+Rules:
+- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
+- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
+- For cross-module "how does X relate to Y" questions, prefer `python3 -m graphify query "<question>"`, `python3 -m graphify path "<A>" "<B>"`, or `python3 -m graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
+- After modifying code files in this session, run `python3 tools/graphify_refresh.py` to keep the app graph current without relying on legacy graph.md files

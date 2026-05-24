@@ -4,6 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, generateId } from "ai";
 import {
   AlertCircle,
+  ArrowLeft,
   BookOpen,
   CheckCircle2,
   Circle,
@@ -26,6 +27,7 @@ import {
   UserCog,
   X,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +44,12 @@ import {
   DEFAULT_APP_MODEL_SETTINGS,
   DEFAULT_APP_SETTINGS,
 } from "@/lib/ai/model-settings";
+import {
+  type GraphifyGraphLink,
+  type GraphifyGraphNode,
+  type NormalizedGraphifyGraph,
+  normalizeGraphifyGraph,
+} from "@/lib/graphify-graph";
 import { slugify } from "@/lib/slug";
 import type {
   Advisor,
@@ -65,6 +73,8 @@ import type {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });
+
 const tabs: Array<{
   id: AppTab;
   label: string;
@@ -79,11 +89,39 @@ type SourceKind = NonNullable<AdvisorSource["kind"]>;
 type AdvisorWorkspaceTab = "llm" | "wiki" | "workshop";
 type LlmWikiLayer = "sources" | "wiki" | "core" | "schema" | "graph";
 type BrainSaveState = "idle" | "pending" | "saving" | "saved" | "error";
+type EditableBrainField = "profile" | "vision" | "direction" | "memory" | "schema";
+
+interface GraphSourceDocument {
+  kind: "core" | "schema" | "wiki" | "source";
+  path: string;
+  title: string;
+  body: string;
+  badges: string[];
+  sourceUrl?: string;
+  extractionNote?: string;
+  onTitleChange?: (value: string) => void;
+  onBodyChange: (value: string) => void;
+  onSourceUrlChange?: (value: string) => void;
+  onSave?: () => void | Promise<void>;
+}
+
+interface GraphForce {
+  strength?: (value: number) => GraphForce;
+  distance?: (value: number) => GraphForce;
+  iterations?: (value: number) => GraphForce;
+}
+
+interface GraphForceMethods {
+  d3Force?: (name: string) => GraphForce | undefined;
+  d3ReheatSimulation?: () => void;
+  zoomToFit?: (durationMs?: number, padding?: number) => void;
+}
 
 interface GraphifyStatusResponse {
   graphify: {
     enabled: boolean;
     forcedDisabled: boolean;
+    graphifyOutDir: string;
     hasGraphifyOut: boolean;
     hasHtml: boolean;
     htmlFile: string | null;
@@ -1049,8 +1087,6 @@ function FoundersChat({
     );
   }
 
-
-
   return (
     <div className="flex h-full min-h-0 flex-1 flex-row">
       <div className="flex flex-col flex-1 min-w-0">
@@ -1182,8 +1218,6 @@ function FoundersChat({
           </div>
         </div>
       </div>
-
-
     </div>
   );
 }
@@ -1642,31 +1676,23 @@ function AdvisorWorkspace({
     return () => window.clearTimeout(handle);
   }, [brain, saveBrainSnapshot]);
 
-  const saveBrain = async () => {
-    if (!brain) return;
-    const serialized = JSON.stringify(brain);
-    latestBrainRef.current = brain;
-    latestBrainSerializedRef.current = serialized;
-    pendingBrainSaveRef.current = null;
-    await saveBrainSnapshot(brain, serialized, { automatic: false });
-  };
-
   const deleteCurrentAdvisor = async () => {
     await jsonFetch(`/api/advisors/${advisor.id}`, { method: "DELETE" });
     await onAdvisorDeleted();
   };
 
-  const saveSource = async () => {
-    if (!selectedSource) return;
-    await jsonFetch(`/api/advisors/${advisor.id}/sources/${selectedSource.id}`, {
+  const saveSource = async (sourceOverride?: AdvisorSource) => {
+    const sourceToSave = sourceOverride ?? selectedSource;
+    if (!sourceToSave) return;
+    await jsonFetch(`/api/advisors/${advisor.id}/sources/${sourceToSave.id}`, {
       method: "PATCH",
       body: JSON.stringify({
-        title: selectedSource.title,
-        body: selectedSource.body,
-        kind: selectedSource.kind,
-        sourceUrl: selectedSource.sourceUrl,
-        status: selectedSource.status,
-        extractionNote: selectedSource.extractionNote,
+        title: sourceToSave.title,
+        body: sourceToSave.body,
+        kind: sourceToSave.kind,
+        sourceUrl: sourceToSave.sourceUrl,
+        status: sourceToSave.status,
+        extractionNote: sourceToSave.extractionNote,
       }),
     });
     await load();
@@ -1825,7 +1851,7 @@ function AdvisorWorkspace({
               />
             </EditorCard>
           </div>
-          <SaveBrainRow onSave={saveBrain} saveState={brainSaveState} />
+          <AutosaveIndicator saveState={brainSaveState} />
         </section>
 
         <section
@@ -1838,6 +1864,7 @@ function AdvisorWorkspace({
           <LlmWikiEditor
             brain={brain}
             advisorId={advisor.id}
+            advisorName={advisor.name}
             sources={sources}
             selectedSource={selectedSource}
             onBrainChange={setBrain}
@@ -1856,7 +1883,6 @@ function AdvisorWorkspace({
                   : "Source imported.",
               );
             }}
-            onSaveBrain={saveBrain}
             saveState={brainSaveState}
           />
         </section>
@@ -1875,20 +1901,22 @@ function AdvisorWorkspace({
   );
 }
 
-function SaveBrainRow({
-  onSave,
-  saveState,
-}: {
-  onSave: () => void | Promise<void>;
-  saveState: BrainSaveState;
-}) {
-  const isSaving = saveState === "saving";
+function AutosaveIndicator({ saveState }: { saveState: BrainSaveState }) {
+  const copy: Record<BrainSaveState, { label: string; tone: string }> = {
+    idle: { label: "Saved", tone: "text-muted-foreground" },
+    pending: { label: "Autosave pending", tone: "text-muted-foreground" },
+    saving: { label: "Autosaving", tone: "text-muted-foreground" },
+    saved: { label: "Saved", tone: "text-muted-foreground" },
+    error: { label: "Autosave failed", tone: "text-destructive" },
+  };
+  const item = copy[saveState];
+  const Icon = saveState === "error" ? AlertCircle : CheckCircle2;
   return (
-    <div className="flex justify-end">
-      <Button onClick={() => void onSave()} disabled={isSaving}>
-        <Save className="size-4" />
-        {isSaving ? "Saving..." : "Save brain"}
-      </Button>
+    <div className={cn("flex justify-end text-xs", item.tone)}>
+      <span className="border-border bg-background inline-flex items-center gap-1.5 rounded-md border px-2 py-1">
+        <Icon className="size-3.5" />
+        {item.label}
+      </span>
     </div>
   );
 }
@@ -1896,6 +1924,7 @@ function SaveBrainRow({
 function LlmWikiEditor({
   brain,
   advisorId,
+  advisorName,
   sources,
   selectedSource,
   onBrainChange,
@@ -1904,20 +1933,19 @@ function LlmWikiEditor({
   onSourceSaveSelected,
   onSourceDelete,
   onSourceImported,
-  onSaveBrain,
   saveState,
 }: {
   brain: AdvisorBrain;
   advisorId: string;
+  advisorName: string;
   sources: AdvisorSource[];
   selectedSource: AdvisorSource | null;
   onBrainChange: (brain: AdvisorBrain) => void;
   onSourceSelect: (id: string) => void;
   onSourceChangeSelected: (source: AdvisorSource) => void;
-  onSourceSaveSelected: () => void | Promise<void>;
+  onSourceSaveSelected: (source?: AdvisorSource) => void | Promise<void>;
   onSourceDelete: (id: string) => void | Promise<void>;
   onSourceImported: (source: AdvisorSource) => void | Promise<void>;
-  onSaveBrain: () => void | Promise<void>;
   saveState: BrainSaveState;
 }) {
   const [layer, setLayer] = React.useState<LlmWikiLayer>("wiki");
@@ -1960,7 +1988,7 @@ function LlmWikiEditor({
   const graphifyUsable = Boolean(
     graphifyStatus?.graphify.enabled &&
       graphifyStatus.graphify.hasGraphifyOut &&
-      (graphifyStatus.graphify.hasHtml || graphifyStatus.graphify.hasGraphJson),
+      graphifyStatus.graphify.hasGraphJson,
   );
 
   const layers: Array<{
@@ -1976,19 +2004,128 @@ function LlmWikiEditor({
     {
       id: "graph",
       label: "Graph",
-      meta: graphifyUsable ? "on" : "fallback",
+      meta: graphifyUsable ? "json" : graphifyStatus ? "missing" : "",
       icon: Circle,
     },
   ];
 
-  const updateWikiPage = (index: number, patch: Partial<BrainPage>) => {
-    onBrainChange({
-      ...brain,
-      wikiPages: brain.wikiPages.map((page, pageIndex) =>
-        pageIndex === index ? { ...page, ...patch, updatedAt: Date.now() } : page,
-      ),
-    });
-  };
+  const updateWikiPage = React.useCallback(
+    (index: number, patch: Partial<BrainPage>) => {
+      onBrainChange({
+        ...brain,
+        wikiPages: brain.wikiPages.map((page, pageIndex) =>
+          pageIndex === index ? { ...page, ...patch, updatedAt: Date.now() } : page,
+        ),
+      });
+    },
+    [brain, onBrainChange],
+  );
+
+  const resolveGraphSource = React.useCallback(
+    (sourceFile: string): GraphSourceDocument | null => {
+      const advisorPrefix = `advisors/${advisorId}/`;
+      if (!sourceFile.startsWith(advisorPrefix)) return null;
+      const localPath = sourceFile.slice(advisorPrefix.length);
+      const coreDocuments: Record<
+        string,
+        { field: EditableBrainField; title: string; kind: "core" | "schema"; badges: string[] }
+      > = {
+        "profile.md": {
+          field: "profile",
+          title: "Profile",
+          kind: "core",
+          badges: ["core", "document"],
+        },
+        "vision.md": {
+          field: "vision",
+          title: "Vision",
+          kind: "core",
+          badges: ["core", "document"],
+        },
+        "direction.md": {
+          field: "direction",
+          title: "Direction",
+          kind: "core",
+          badges: ["core", "document"],
+        },
+        "memory.md": {
+          field: "memory",
+          title: "Advisor Memory",
+          kind: "core",
+          badges: ["core", "document"],
+        },
+        "schema.md": {
+          field: "schema",
+          title: "Schema",
+          kind: "schema",
+          badges: ["schema", "markdown"],
+        },
+      };
+      const coreDocument = coreDocuments[localPath];
+      if (coreDocument) {
+        return {
+          kind: coreDocument.kind,
+          path: sourceFile,
+          title: coreDocument.title,
+          body: brain[coreDocument.field],
+          badges: coreDocument.badges,
+          onBodyChange: (value) => onBrainChange({ ...brain, [coreDocument.field]: value }),
+        };
+      }
+
+      const wikiMatch = /^wiki\/(.+)\.md$/.exec(localPath);
+      if (wikiMatch) {
+        const pageIndex = brain.wikiPages.findIndex((page) => page.slug === wikiMatch[1]);
+        const page = pageIndex >= 0 ? brain.wikiPages[pageIndex] : null;
+        if (!page) return null;
+        return {
+          kind: "wiki",
+          path: sourceFile,
+          title: page.title,
+          body: page.content,
+          badges: ["wiki", "markdown"],
+          onTitleChange: (value) => updateWikiPage(pageIndex, { title: value }),
+          onBodyChange: (value) => updateWikiPage(pageIndex, { content: value }),
+        };
+      }
+
+      const sourceChunkMatch = /^sources\/([^/]+)\/chunk-(\d+)\.md$/.exec(localPath);
+      const sourceMatch = sourceChunkMatch ? null : /^sources\/([^/]+)\.md$/.exec(localPath);
+      const sourceId = sourceChunkMatch?.[1] ?? sourceMatch?.[1];
+      if (sourceId) {
+        const source = sources.find((item) => item.id === sourceId);
+        if (!source) return null;
+        const chunkBadge = sourceChunkMatch ? [`chunk ${sourceChunkMatch[2]}`] : [];
+        return {
+          kind: "source",
+          path: sourceFile,
+          title: source.title,
+          body: source.body,
+          sourceUrl: source.sourceUrl,
+          extractionNote: source.extractionNote,
+          badges: [source.kind ?? "text", source.status ?? "ready", ...chunkBadge],
+          onTitleChange: (value) => onSourceChangeSelected({ ...source, title: value }),
+          onBodyChange: (value) => onSourceChangeSelected({ ...source, body: value }),
+          onSourceUrlChange:
+            source.sourceUrl !== undefined
+              ? (value) => onSourceChangeSelected({ ...source, sourceUrl: value })
+              : undefined,
+          onSave: () => onSourceSaveSelected(source),
+        };
+      }
+
+      return null;
+    },
+    [
+      advisorId,
+      brain,
+      onBrainChange,
+      onSourceChangeSelected,
+      onSourceSaveSelected,
+      sources,
+      updateWikiPage,
+    ],
+  );
 
   const addWikiPage = () => {
     const title = "New page";
@@ -2018,21 +2155,12 @@ function LlmWikiEditor({
 
   return (
     <section className="border-border bg-card flex min-h-0 flex-1 flex-col rounded-lg border">
-      <div className="border-border flex flex-wrap items-center justify-between gap-3 border-b p-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant={showFiles ? "secondary" : "outline"}
-            onClick={() => setShowFiles((current) => !current)}
-          >
-            <Folder className="size-4" />
-            Library
-          </Button>
+      <div className="border-border border-b p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div
             role="tablist"
             aria-label="LLM Wiki layers"
-            className="border-border grid overflow-hidden rounded-md border sm:grid-cols-2 lg:grid-cols-5"
+            className="border-border grid min-w-0 flex-1 overflow-hidden rounded-md border sm:grid-cols-2 lg:grid-cols-5"
           >
             {layers.map((item) => {
               const Icon = item.icon;
@@ -2058,8 +2186,11 @@ function LlmWikiEditor({
               );
             })}
           </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <LibrarySwitch checked={showFiles} onCheckedChange={setShowFiles} />
+            <AutosaveIndicator saveState={saveState} />
+          </div>
         </div>
-        <SaveBrainRow onSave={onSaveBrain} saveState={saveState} />
       </div>
 
       <div className={cn("grid min-h-0 flex-1", showFiles && "lg:grid-cols-[260px_minmax(0,1fr)]")}>
@@ -2153,17 +2284,15 @@ function LlmWikiEditor({
                     className="border-brand/60 bg-brand-muted w-full rounded-md border px-2 py-2 text-left text-xs"
                   >
                     <span className="block truncate font-mono">graphify-out</span>
-                    <span className="text-muted-foreground mt-0.5 block truncate">
-                      Preferred graph UX
-                    </span>
+                    <span className="text-muted-foreground mt-0.5 block truncate">Graph data</span>
                   </button>
                   <button
                     type="button"
                     className="border-border/70 w-full rounded-md border px-2 py-2 text-left text-xs"
                   >
-                    <span className="block truncate font-mono">.skills/graph_fallback</span>
+                    <span className="block truncate font-mono">graph.json</span>
                     <span className="text-muted-foreground mt-0.5 block truncate">
-                      Disabled fallback
+                      Viewer source
                     </span>
                   </button>
                 </>
@@ -2287,7 +2416,13 @@ function LlmWikiEditor({
           )}
 
           {layer === "graph" && (
-            <GraphifyLayer status={graphifyStatus} error={graphifyStatusError} />
+            <GraphifyLayer
+              advisorId={advisorId}
+              advisorName={advisorName}
+              status={graphifyStatus}
+              error={graphifyStatusError}
+              resolveSource={resolveGraphSource}
+            />
           )}
         </div>
       </div>
@@ -2295,27 +2430,120 @@ function LlmWikiEditor({
   );
 }
 
+function LibrarySwitch({
+  checked,
+  onCheckedChange,
+}: {
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onCheckedChange(!checked)}
+      className="focus-visible:ring-ring/50 inline-flex min-h-9 items-center gap-2 rounded-md px-1 text-sm font-medium outline-none focus-visible:ring-2"
+    >
+      <Folder className="text-muted-foreground size-4" />
+      <span>Library</span>
+      <span
+        className={cn(
+          "relative h-5 w-9 shrink-0 overflow-hidden rounded-full border transition-colors",
+          checked ? "border-primary bg-primary" : "border-border bg-muted",
+        )}
+      >
+        <span
+          className={cn(
+            "bg-background absolute top-0.5 left-0.5 h-3.5 w-3.5 rounded-full shadow-sm transition-transform",
+            checked && "translate-x-4",
+          )}
+        />
+      </span>
+    </button>
+  );
+}
+
 function GraphifyLayer({
+  advisorId,
+  advisorName,
   status,
   error,
+  resolveSource,
 }: {
+  advisorId: string;
+  advisorName: string;
   status: GraphifyStatusResponse | null;
   error: string;
+  resolveSource: (sourceFile: string) => GraphSourceDocument | null;
 }) {
+  const [view, setView] = React.useState<"map" | "report">("map");
+  const [graph, setGraph] = React.useState<NormalizedGraphifyGraph | null>(null);
+  const [report, setReport] = React.useState("");
+  const [graphError, setGraphError] = React.useState("");
+  const [selectedNodeId, setSelectedNodeId] = React.useState("");
+  const [sourceNavStatus, setSourceNavStatus] = React.useState("");
+  const [openSourceFile, setOpenSourceFile] = React.useState("");
+
+  React.useEffect(() => {
+    if (!status?.graphify.hasGraphJson) return;
+    let cancelled = false;
+
+    async function loadGraph() {
+      try {
+        const [graphResponse, reportResponse] = await Promise.all([
+          fetch("/api/graphify/artifact?file=graph.json"),
+          status?.graphify.hasReport
+            ? fetch("/api/graphify/artifact?file=GRAPH_REPORT.md")
+            : Promise.resolve(null),
+        ]);
+        if (!graphResponse.ok) throw new Error(`Graph JSON failed (${graphResponse.status})`);
+        const normalized = normalizeGraphifyGraph(await graphResponse.json(), {
+          advisorId,
+          advisorName,
+        });
+        const reportText = reportResponse?.ok ? await reportResponse.text() : "";
+        if (!cancelled) {
+          setGraph(normalized);
+          setReport(reportText);
+          setGraphError("");
+          setSelectedNodeId((current) =>
+            current && normalized.nodes.some((node) => node.id === current)
+              ? current
+              : normalized.nodes[0]?.id || "",
+          );
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setGraph(null);
+          setGraphError(err instanceof Error ? err.message : "Failed to load graph.json");
+        }
+      }
+    }
+
+    void loadGraph();
+    return () => {
+      cancelled = true;
+    };
+  }, [advisorId, advisorName, status]);
+
   if (error) {
     return <EmptyPanel title="Graph status unavailable" body={error} />;
   }
 
   if (!status) {
-    return <EmptyPanel title="Loading graph status" body="Checking Graphify and fallback skill." />;
+    return <EmptyPanel title="Loading graph status" body="Checking Graphify artifacts." />;
   }
 
-  const { graphify, fallbackSkill } = status;
-  const graphifyUsable =
-    graphify.enabled && graphify.hasGraphifyOut && (graphify.hasHtml || graphify.hasGraphJson);
-  const htmlSrc = graphify.htmlFile
-    ? `/api/graphify/artifact?file=${encodeURIComponent(graphify.htmlFile)}`
-    : "";
+  const { graphify } = status;
+  const graphifyUsable = graphify.enabled && graphify.hasGraphifyOut && graphify.hasGraphJson;
+  const selectedNode = graph?.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const openDocument = openSourceFile ? resolveSource(openSourceFile) : null;
+  const relatedLinks = selectedNode
+    ? (graph?.links ?? []).filter(
+        (link) => link.source === selectedNode.id || link.target === selectedNode.id,
+      )
+    : [];
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -2326,17 +2554,17 @@ function GraphifyLayer({
           </p>
           <h3 className="mt-1 text-sm font-semibold">
             {graphifyUsable
-              ? "Enabled with artifacts"
+              ? "Enabled with graph.json"
               : graphify.enabled
                 ? "Enabled, artifacts missing"
                 : "Disabled by USE_GRAPHIFY=false"}
           </h3>
           <p className="text-muted-foreground mt-1 text-xs">
             {graphifyUsable
-              ? "graphify-out exists and will be preferred for graph UX."
+              ? "The viewer is reading the Graphify graph artifact directly."
               : graphify.hasGraphifyOut
-                ? "graphify-out exists, but HTML/JSON graph artifacts are missing."
-                : "No graphify-out directory found; fallback context is used when needed."}
+                ? "graphify-out exists, but graph.json is missing."
+                : "No graphify-out directory found. Build the graph before using this view."}
           </p>
         </div>
         <div className="border-border bg-background rounded-md border p-3">
@@ -2357,53 +2585,479 @@ function GraphifyLayer({
         </div>
         <div className="border-border bg-background rounded-md border p-3">
           <p className="text-muted-foreground font-mono text-[10px] uppercase tracking-wider">
-            Fallback skill
+            Core nodes
           </p>
-          <h3 className="mt-1 truncate text-sm font-semibold">
-            {fallbackSkill?.name ?? "Missing"}
-          </h3>
+          <h3 className="mt-1 truncate text-sm font-semibold">{graph?.coreNodeCount ?? 0} blue</h3>
           <p className="text-muted-foreground mt-1 text-xs">
-            {fallbackSkill?.relativePath ?? ".skills/graph_fallback/SKILL.md"}
+            Profile, vision, direction, and memory nodes are highlighted as core context.
           </p>
         </div>
       </div>
 
-      {graphifyUsable && graphify.hasHtml && htmlSrc ? (
-        <iframe
-          title="Graphify graph"
-          src={htmlSrc}
-          className="border-border min-h-[520px] flex-1 rounded-md border bg-background"
-        />
-      ) : (
-        <div className="border-border bg-muted/20 flex min-h-[360px] flex-1 flex-col rounded-md border p-4">
-          <h3 className="text-sm font-semibold">Fallback graph context</h3>
-          <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
-            Founder&apos;s Chat will audit the fallback skill before answering while Graphify is
-            disabled or unavailable. The skill stays concise and routes to modular markdown
-            references.
-          </p>
-          <div className="mt-4 grid gap-2">
-            {(fallbackSkill?.references ?? []).map((reference) => (
-              <div
-                key={reference.relativePath}
-                className="border-border bg-background rounded-md border px-3 py-2 text-sm"
-              >
-                <div className="font-medium">{reference.title}</div>
-                <div className="text-muted-foreground mt-0.5 font-mono text-xs">
-                  {reference.relativePath}
+      {!graphifyUsable ? (
+        <GraphifyInstallPanel forcedDisabled={graphify.forcedDisabled} />
+      ) : graphError ? (
+        <EmptyPanel title="Graph JSON unavailable" body={graphError} />
+      ) : graph && graph.nodes.length > 0 ? (
+        <div className="grid min-h-[560px] flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="border-border bg-background flex min-h-[520px] flex-col overflow-hidden rounded-md border">
+            <div className="border-border flex flex-wrap items-center justify-between gap-2 border-b p-2">
+              {openSourceFile ? (
+                <div className="flex min-w-0 items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setOpenSourceFile("");
+                      setSourceNavStatus("");
+                    }}
+                  >
+                    <ArrowLeft className="size-4" />
+                    Back
+                  </Button>
+                  <span className="text-muted-foreground truncate font-mono text-xs">
+                    {openDocument?.path ?? openSourceFile}
+                  </span>
+                </div>
+              ) : (
+                <div className="border-border inline-grid overflow-hidden rounded-md border grid-cols-2">
+                  {(["map", "report"] as const).map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => {
+                        setView(item);
+                        setOpenSourceFile("");
+                      }}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-medium capitalize transition-colors",
+                        view === item
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <span className="text-muted-foreground text-xs">
+                {graph.nodes.length} nodes · {graph.links.length} edges · {graph.communities}{" "}
+                communities
+              </span>
+            </div>
+            <div className="relative min-h-0 flex-1">
+              {view === "map" ? (
+                <GraphCanvas
+                  graph={graph}
+                  selectedNodeId={selectedNodeId}
+                  onSelectNode={(id) => {
+                    setSelectedNodeId(id);
+                    setSourceNavStatus("");
+                  }}
+                />
+              ) : (
+                <ScrollArea className="absolute inset-0">
+                  <pre className="text-muted-foreground whitespace-pre-wrap p-4 font-mono text-xs">
+                    {report ||
+                      "No GRAPH_REPORT.md artifact found. The map view is using graph.json."}
+                  </pre>
+                </ScrollArea>
+              )}
+              {openSourceFile && (
+                <div className="bg-background absolute inset-0 z-10 flex min-h-0 flex-col">
+                  {openDocument ? (
+                    <GraphSourceEditor key={openDocument.path} document={openDocument} />
+                  ) : (
+                    <EmptyPanel
+                      title="Source unavailable"
+                      body="This graph node is outside the editable advisor files."
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <aside className="border-border bg-background min-h-0 rounded-md border p-3">
+            {selectedNode ? (
+              <div className="flex h-full min-h-0 flex-col gap-3">
+                <div>
+                  <p className="text-muted-foreground font-mono text-[10px] uppercase tracking-wider">
+                    Selected node
+                  </p>
+                  <h3 className="mt-1 text-sm font-semibold">{selectedNode.label}</h3>
+                  <p className="text-muted-foreground mt-1 break-all font-mono text-xs">
+                    {selectedNode.sourceFile || "No source file"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {selectedNode.isCore && (
+                    <span className="rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-1 text-blue-700">
+                      core
+                    </span>
+                  )}
+                  {selectedNode.isRoot && (
+                    <span className="border-border rounded-md border bg-primary px-2 py-1 text-primary-foreground">
+                      advisor root
+                    </span>
+                  )}
+                  <span className="border-border rounded-md border px-2 py-1">
+                    community {selectedNode.community ?? "n/a"}
+                  </span>
+                  <span className="border-border rounded-md border px-2 py-1">
+                    {selectedNode.fileType}
+                  </span>
+                </div>
+                {selectedNode.sourceFile && !selectedNode.isRoot && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const document = resolveSource(selectedNode.sourceFile);
+                      if (document) {
+                        setOpenSourceFile(selectedNode.sourceFile);
+                        setSourceNavStatus("");
+                        return;
+                      }
+                      setSourceNavStatus("This source is outside the selected advisor editor.");
+                    }}
+                  >
+                    <FileText className="size-4" />
+                    Open source
+                  </Button>
+                )}
+                {sourceNavStatus && (
+                  <p className="text-muted-foreground text-xs">{sourceNavStatus}</p>
+                )}
+                <div className="min-h-0 flex-1">
+                  <p className="text-muted-foreground mb-2 font-mono text-[10px] uppercase tracking-wider">
+                    Relationships
+                  </p>
+                  <ScrollArea className="h-full pr-2">
+                    <div className="space-y-2">
+                      {relatedLinks.map((link) => (
+                        <div
+                          key={`${link.source}-${link.relation}-${link.target}`}
+                          className="border-border rounded-md border p-2 text-xs"
+                        >
+                          <div className="font-mono">{link.relation}</div>
+                          <div className="text-muted-foreground mt-1 break-all">
+                            {link.source} → {link.target}
+                          </div>
+                          <div className="text-muted-foreground mt-1">{link.confidence}</div>
+                        </div>
+                      ))}
+                      {relatedLinks.length === 0 && (
+                        <div className="border-border text-muted-foreground rounded-md border border-dashed p-3 text-xs">
+                          No relationships for this node.
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
                 </div>
               </div>
-            ))}
-            {!fallbackSkill && (
-              <div className="border-border text-muted-foreground rounded-md border border-dashed p-3 text-sm">
-                Create .skills/graph_fallback/SKILL.md to enable fallback audits.
-              </div>
+            ) : (
+              <EmptyPanel title="No node selected" body="Select a graph node to inspect it." />
             )}
-          </div>
+          </aside>
         </div>
+      ) : (
+        <EmptyPanel
+          title="Graph is empty"
+          body="Run python3 tools/graphify_refresh.py after adding advisor or founder markdown."
+        />
       )}
     </div>
   );
+}
+
+function GraphSourceEditor({ document }: { document: GraphSourceDocument }) {
+  const [saveState, setSaveState] = React.useState<"idle" | "saving" | "saved" | "error">("idle");
+  const titleInputId = React.useId();
+  const sourceInputId = React.useId();
+
+  const saveDocument = async () => {
+    if (!document.onSave || saveState === "saving") return;
+    setSaveState("saving");
+    try {
+      await document.onSave();
+      setSaveState("saved");
+    } catch {
+      setSaveState("error");
+    }
+  };
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
+      <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-muted-foreground truncate font-mono text-xs">{document.path}</p>
+          <h3 className="mt-1 truncate text-sm font-semibold">{document.title}</h3>
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs">
+          {document.badges.map((badge) => (
+            <span
+              key={badge}
+              className={cn(
+                "border-border rounded-md border px-2 py-1",
+                badge === "core" && "border-blue-500/40 bg-blue-500/10 text-blue-700",
+                badge === "needs_review" &&
+                  "border-destructive/30 bg-destructive/10 text-destructive",
+              )}
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {(document.onTitleChange || document.onSourceUrlChange) && (
+        <div className="grid shrink-0 gap-2 md:grid-cols-2">
+          {document.onTitleChange && (
+            <label htmlFor={titleInputId} className="grid gap-1.5 text-sm font-medium">
+              <span>Name</span>
+              <Input
+                id={titleInputId}
+                value={document.title}
+                onChange={(event) => document.onTitleChange?.(event.target.value)}
+              />
+            </label>
+          )}
+          {document.onSourceUrlChange && document.sourceUrl !== undefined && (
+            <label htmlFor={sourceInputId} className="grid gap-1.5 text-sm font-medium">
+              <span>Source</span>
+              <Input
+                id={sourceInputId}
+                value={document.sourceUrl}
+                onChange={(event) => document.onSourceUrlChange?.(event.target.value)}
+              />
+            </label>
+          )}
+        </div>
+      )}
+
+      {document.extractionNote && (
+        <div className="border-destructive/20 bg-destructive/10 text-destructive flex shrink-0 items-start gap-2 rounded-md border px-3 py-2 text-xs leading-5">
+          <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+          <span>{document.extractionNote}</span>
+        </div>
+      )}
+
+      <Textarea
+        value={document.body}
+        onChange={(event) => {
+          document.onBodyChange(event.target.value);
+          if (document.onSave) setSaveState("idle");
+        }}
+        className="min-h-[420px] flex-1 resize-none font-mono text-sm"
+      />
+
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+        <span
+          className={cn(
+            "text-muted-foreground text-xs",
+            saveState === "error" && "text-destructive",
+          )}
+        >
+          {document.onSave
+            ? saveState === "saving"
+              ? "Saving..."
+              : saveState === "saved"
+                ? "Saved"
+                : saveState === "error"
+                  ? "Save failed"
+                  : "Unsaved source edits"
+            : "Autosaves"}
+        </span>
+        {document.onSave && (
+          <Button type="button" variant="outline" size="sm" onClick={() => void saveDocument()}>
+            <Save className="size-4" />
+            Save source
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GraphifyInstallPanel({ forcedDisabled }: { forcedDisabled: boolean }) {
+  return (
+    <div className="border-border bg-muted/20 flex min-h-[360px] flex-1 flex-col rounded-md border p-4">
+      <h3 className="text-sm font-semibold">Build the Graphify view</h3>
+      <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
+        The Graph tab does not use graph.md as a fallback. It renders Graphify artifacts only.
+      </p>
+      {forcedDisabled && (
+        <p className="text-destructive mt-2 text-sm">USE_GRAPHIFY=false is disabling Graphify.</p>
+      )}
+      <pre className="border-border bg-background mt-4 overflow-x-auto rounded-md border p-3 font-mono text-xs">
+        pip install graphifyy{"\n"}
+        python3 -m graphify install{"\n"}
+        python3 tools/graphify_refresh.py
+      </pre>
+    </div>
+  );
+}
+
+function GraphCanvas({
+  graph,
+  selectedNodeId,
+  onSelectNode,
+}: {
+  graph: NormalizedGraphifyGraph;
+  selectedNodeId: string;
+  onSelectNode: (id: string) => void;
+}) {
+  const [containerRef, size] = useElementSize<HTMLDivElement>();
+  const graphData = React.useMemo(
+    () => ({
+      nodes: graph.nodes,
+      links: graph.links,
+    }),
+    [graph],
+  );
+  const graphRef = React.useRef<GraphForceMethods | null>(null);
+  const GraphComponent = ForceGraph2D as unknown as React.ForwardRefExoticComponent<
+    Record<string, unknown> & React.RefAttributes<GraphForceMethods>
+  >;
+
+  React.useEffect(() => {
+    if (!size.width) return;
+    const handles: number[] = [];
+    const tuneGraph = () => {
+      const engine = graphRef.current;
+      if (!engine) return;
+      const nodeCount = graph.nodes.length;
+      engine.d3Force?.("charge")?.strength?.(nodeCount > 10 ? -2600 : -1400);
+      engine
+        .d3Force?.("link")
+        ?.distance?.(nodeCount > 10 ? 320 : 220)
+        ?.iterations?.(4);
+      engine.d3ReheatSimulation?.();
+    };
+    for (const delay of [0, 250, 900]) {
+      handles.push(window.setTimeout(tuneGraph, delay));
+    }
+    handles.push(
+      window.setTimeout(() => {
+        graphRef.current?.zoomToFit?.(600, 96);
+      }, 1600),
+    );
+    return () => {
+      for (const handle of handles) window.clearTimeout(handle);
+    };
+  }, [graph.nodes.length, size.width]);
+
+  return (
+    <div ref={containerRef} className="min-h-[520px] flex-1">
+      {size.width > 0 && (
+        <GraphComponent
+          ref={graphRef}
+          graphData={graphData}
+          width={size.width}
+          height={Math.max(size.height, 520)}
+          nodeId="id"
+          backgroundColor="rgba(0,0,0,0)"
+          nodeRelSize={6}
+          linkColor={(link: GraphifyGraphLink) =>
+            link.confidence === "INFERRED" ? "rgba(80,80,80,0.22)" : "rgba(80,80,80,0.36)"
+          }
+          linkWidth={(link: GraphifyGraphLink) => (link.confidence === "EXTRACTED" ? 1.4 : 0.8)}
+          linkLabel={(link: GraphifyGraphLink) => link.relation}
+          nodeLabel={(node: GraphifyGraphNode) => `${node.label}\n${node.sourceFile}`}
+          nodeCanvasObjectMode={() => "replace"}
+          nodeCanvasObject={(
+            node: GraphifyGraphNode & { x?: number; y?: number },
+            ctx: CanvasRenderingContext2D,
+            scale: number,
+          ) => drawGraphNode(node, ctx, scale, node.id === selectedNodeId)}
+          nodePointerAreaPaint={(
+            node: GraphifyGraphNode & { x?: number; y?: number },
+            color: string,
+            ctx: CanvasRenderingContext2D,
+          ) => {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(node.x ?? 0, node.y ?? 0, node.isCore ? 10 : 8, 0, 2 * Math.PI);
+            ctx.fill();
+          }}
+          onNodeClick={(node: GraphifyGraphNode) => onSelectNode(node.id)}
+          cooldownTicks={260}
+          d3AlphaDecay={0.018}
+          d3VelocityDecay={0.12}
+          enableNodeDrag
+        />
+      )}
+    </div>
+  );
+}
+
+function drawGraphNode(
+  node: GraphifyGraphNode & { x?: number; y?: number },
+  ctx: CanvasRenderingContext2D,
+  scale: number,
+  selected: boolean,
+) {
+  const x = node.x ?? 0;
+  const y = node.y ?? 0;
+  const radius = selected ? 8.5 : node.isRoot ? 8 : node.isCore ? 6.5 : 4.8;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, 2 * Math.PI);
+  ctx.fillStyle = selected
+    ? "#111827"
+    : node.isRoot
+      ? "#111827"
+      : node.isCore
+        ? "#2563eb"
+        : communityColor(node.community);
+  ctx.fill();
+  if (!node.label) return;
+
+  const safeScale = Math.max(scale, 0.35);
+  const maxLabelLength = node.isRoot ? 30 : selected ? 26 : 22;
+  const label =
+    node.label.length > maxLabelLength
+      ? `${node.label.slice(0, Math.max(maxLabelLength - 3, 1))}...`
+      : node.label;
+  const screenFontSize = node.isRoot ? 11 : selected ? 9.5 : node.isCore ? 8.25 : 7.5;
+  const fontSize = screenFontSize / safeScale;
+  const labelY = y + radius + 4 / safeScale;
+
+  ctx.font = `${node.isRoot || selected ? "600 " : ""}${fontSize}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.lineWidth = 3 / safeScale;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
+  ctx.strokeText(label, x, labelY);
+  ctx.fillStyle = selected || node.isRoot ? "#111827" : node.isCore ? "#1d4ed8" : "#52525b";
+  ctx.fillText(label, x, labelY);
+}
+
+function communityColor(community: number | null) {
+  const colors = ["#737373", "#0f766e", "#9333ea", "#ca8a04", "#dc2626", "#4f46e5"];
+  if (typeof community !== "number") return colors[0];
+  return colors[Math.abs(community) % colors.length];
+}
+
+function useElementSize<T extends HTMLElement>() {
+  const ref = React.useRef<T | null>(null);
+  const [size, setSize] = React.useState({ width: 0, height: 0 });
+
+  React.useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const rect = entry.contentRect;
+      setSize({ width: rect.width, height: rect.height });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return [ref, size] as const;
 }
 
 function uniquePageSlug(base: string, pages: BrainPage[]) {
@@ -2441,7 +3095,7 @@ function SourcesEditor({
   selectedSource: AdvisorSource | null;
   onSelect: (id: string) => void;
   onChangeSelected: (source: AdvisorSource) => void;
-  onSaveSelected: () => void;
+  onSaveSelected: (source?: AdvisorSource) => void | Promise<void>;
   onDelete: (id: string) => void | Promise<void>;
   onImported: (source: AdvisorSource) => void | Promise<void>;
 }) {
@@ -2862,7 +3516,7 @@ function SourcesEditor({
               className="min-h-[360px] flex-1 font-mono text-sm"
             />
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={onSaveSelected}>
+              <Button type="button" variant="outline" onClick={() => void onSaveSelected()}>
                 Save source
               </Button>
               <Button

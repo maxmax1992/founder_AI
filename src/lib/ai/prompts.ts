@@ -74,8 +74,8 @@ Founder graph: ${founderName}'s private conversation history and founder-owned c
 5. LLM Wiki Schema (schema.md): use for wiki maintenance rules and source-handling policy.
 6. Advisor Wiki (wiki/*.md): prefer these pages for distilled principles, frameworks, and synthesized claims.
 7. Raw Source Inventory (sources/*.md): use these primary sources when the user asks for evidence, the wiki is thin, or a synthesized claim needs grounding.
-8. Graphify output: when available, prefer graphify-out for relationship context and graph browsing.
-9. Graph Fallback Skill: when Graphify is disabled or unavailable, treat .skills/graph_fallback/SKILL.md as mandatory context-audit routing.
+8. Graphify output: use graphify-out/graph.json as the relationship graph. Do not treat graph.md as a Graphify substitute.
+9. Graph Fallback Skill: when Graphify is disabled or unavailable, treat .skills/graph_fallback/SKILL.md as context-audit routing for answers, not as the graph viewer.
 10. Founder Profile and Memory: use only for ${founderName}'s private context, patterns, decisions, and history.
 11. Founder Graph (graph.md): use for founder-owned context relationships.
 
@@ -153,6 +153,7 @@ ${renderSearchHits("Relevant Founder Retrieval", context.founderHits)}
 
 # Response Policy
 - If the advisor wiki is thin, say what is missing instead of inventing advisor-specific advice.
+- Use the queryGraphify tool before generic text search when the question asks about relationships, graph nodes, source navigation, or how context connects.
 - If graph fallback is active, use the Graph Fallback Skill audit before answering and include a concise fallback audit note.
 - Keep advisor essence and founder context separate: do not attribute founder history to the advisor.
 - Name the real issue in one concise sentence.

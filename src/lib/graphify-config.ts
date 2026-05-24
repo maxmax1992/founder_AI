@@ -3,7 +3,7 @@ import path from "node:path";
 
 const ROOT = process.cwd();
 const GRAPHIFY_OUT_DIR = path.join(ROOT, "graphify-out");
-const HTML_CANDIDATES = ["graph.html", "index.html"];
+const HTML_CANDIDATES = ["GRAPH_TREE.html", "graph.html", "index.html"];
 
 export interface GraphifyRuntimeStatus {
   enabled: boolean;
@@ -53,7 +53,13 @@ export async function getGraphifyRuntimeStatus(): Promise<GraphifyRuntimeStatus>
 }
 
 export async function readGraphifyArtifact(file: string) {
-  const allowed = new Set(["graph.html", "index.html", "graph.json", "GRAPH_REPORT.md"]);
+  const allowed = new Set([
+    "GRAPH_TREE.html",
+    "graph.html",
+    "index.html",
+    "graph.json",
+    "GRAPH_REPORT.md",
+  ]);
   if (!allowed.has(file)) return null;
   const artifactPath = path.join(GRAPHIFY_OUT_DIR, file);
   if (!(await exists(artifactPath))) return null;

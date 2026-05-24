@@ -1,7 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
-
+import { queryGraphifyConnector } from "@/lib/graphify-connector";
 import {
+  getAdvisor,
   readAdvisorPage,
   readFounderPage,
   searchAdvisorBrain,
@@ -20,6 +21,21 @@ export function buddyContextTools(advisorId: string, founderId: string) {
       execute: async ({ query }) => ({
         results: await searchBuddyContext(advisorId, founderId, query),
       }),
+    }),
+    queryGraphify: tool({
+      description:
+        "Custom Graphify connector for Founder's Chat. Traverse graphify-out/graph.json for node and relationship context before answering graph, source, or relationship questions.",
+      inputSchema: z.object({
+        query: z.string().min(1),
+        budget: z.number().int().min(300).max(2400).optional(),
+      }),
+      execute: async ({ query, budget }) => {
+        const advisor = await getAdvisor(advisorId);
+        return queryGraphifyConnector(query, budget, {
+          advisorId,
+          advisorName: advisor?.name,
+        });
+      },
     }),
     searchAdvisorContext: tool({
       description:

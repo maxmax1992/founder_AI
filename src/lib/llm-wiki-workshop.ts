@@ -16,6 +16,12 @@ const COMPILED_WIKI_PAGE_SLUGS = new Set([
   "compiled-source-signals",
 ]);
 
+const COMPILED_WIKI_PAGE_PRIORITY = new Map([
+  ["founder-operating-principles", 0],
+  ["compiled-source-signals", 1],
+  ["source-index", 2],
+]);
+
 interface UniqueSource {
   source: AdvisorSource;
   duplicateIds: string[];
@@ -118,6 +124,7 @@ export function answerQuestionFromCompiledWiki(brain: AdvisorBrain, question: st
   const terms = questionTerms(question);
   const pages = brain.wikiPages
     .filter((page) => COMPILED_WIKI_PAGE_SLUGS.has(page.slug))
+    .sort((a, b) => compiledWikiPageRank(a.slug) - compiledWikiPageRank(b.slug))
     .map((page) => ({
       title: page.title,
       lines: page.content
@@ -142,6 +149,10 @@ export function answerQuestionFromCompiledWiki(brain: AdvisorBrain, question: st
   return matches.length > 0
     ? matches.join("\n")
     : "No compiled wiki passage supports this answer yet.";
+}
+
+function compiledWikiPageRank(slug: string) {
+  return COMPILED_WIKI_PAGE_PRIORITY.get(slug) ?? COMPILED_WIKI_PAGE_PRIORITY.size;
 }
 
 export function semanticWikiDigest(brain: AdvisorBrain) {
@@ -354,10 +365,26 @@ function citeMatchingSource(uniqueSources: UniqueSource[], pattern: RegExp) {
 }
 
 function sourceHighlights(body: string) {
-  const sentences = body
+  const sourceText = body
     .replace(/^# .+$/gm, "")
     .replace(/^Source type:.+$/gm, "")
     .replace(/^Source URL\/file:.+$/gm, "")
+    .trim();
+  const compactSourceText = sourceText.replace(/\s+/g, " ").trim();
+  if (compactSourceText.length >= 20 && compactSourceText.length <= 220) {
+    return [compactSourceText];
+  }
+
+  const notableLines = sourceText
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(
+      (line) =>
+        line.length >= 20 &&
+        line.length <= 260 &&
+        /first tweet|bug bounty|hackerone|security|vulnerability/i.test(line),
+    );
+  const sentences = sourceText
     .split(/(?<=[.!?])\s+/)
     .map((sentence) => sentence.replace(/\s+/g, " ").trim())
     .filter((sentence) => sentence.length >= 30 && sentence.length <= 260);
@@ -370,6 +397,7 @@ function sourceHighlights(body: string) {
     /attention to detail|meticulousness/i,
     /evidence|checkpoint/i,
     /customer/i,
+    /tweet|bug bounty|hackerone|security|vulnerability/i,
   ];
   const scored = sentences
     .map((sentence, index) => ({
@@ -379,7 +407,19 @@ function sourceHighlights(body: string) {
     }))
     .sort((a, b) => b.score - a.score || a.index - b.index);
 
-  return scored.slice(0, 5).map(({ sentence }) => sentence);
+  return uniqueHighlights([...notableLines, ...scored.map(({ sentence }) => sentence)]).slice(0, 5);
+}
+
+function uniqueHighlights(highlights: string[]) {
+  const unique = new Set<string>();
+  const result: string[] = [];
+  for (const highlight of highlights) {
+    const normalized = highlight.toLowerCase();
+    if (unique.has(normalized)) continue;
+    unique.add(normalized);
+    result.push(highlight);
+  }
+  return result;
 }
 
 function questionTerms(question: string) {
@@ -389,10 +429,18 @@ function questionTerms(question: string) {
     "about",
     "after",
     "before",
+    "concrete",
+    "detail",
+    "details",
     "does",
+    "first",
     "founder",
     "handle",
+    "marten",
+    "mickos",
     "should",
+    "source",
+    "sources",
     "what",
     "where",
     "which",
@@ -405,8 +453,9 @@ function questionTerms(question: string) {
   if (/vc|investor|disagree/.test(normalized)) terms.add("argue");
   if (/pmf|product/.test(normalized)) terms.add("product-market");
   if (/magical|unique|edge/.test(normalized)) terms.add("magical");
-  if (/detail|meticulous/.test(normalized)) terms.add("meticulousness");
+  if (/attention to detail|meticulous/.test(normalized)) terms.add("meticulousness");
   if (/evidence|checkpoint/.test(normalized)) terms.add("checkpoint");
+  if (/tweet/.test(normalized)) terms.add("tweet");
   return [...terms];
 }
 

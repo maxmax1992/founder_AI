@@ -10,6 +10,8 @@
 
 # local runtime data
 /data/
+/.graphify-corpus/
+/graphify-out/
 
 # env
 .env*

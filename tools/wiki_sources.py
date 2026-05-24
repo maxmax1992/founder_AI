@@ -210,7 +210,7 @@ def cmd_active_paths(args: argparse.Namespace) -> None:
 
 
 def cmd_graphify_command(args: argparse.Namespace) -> None:
-    print("graphify sources/active --update --wiki --obsidian --obsidian-dir wiki")
+    print("python3 -m graphify extract sources/active --out .")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -269,4 +269,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

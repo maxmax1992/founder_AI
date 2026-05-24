@@ -4,6 +4,7 @@ import { errorJson } from "@/lib/http";
 export const runtime = "nodejs";
 
 const CONTENT_TYPES: Record<string, string> = {
+  "GRAPH_TREE.html": "text/html; charset=utf-8",
   "graph.html": "text/html; charset=utf-8",
   "index.html": "text/html; charset=utf-8",
   "graph.json": "application/json; charset=utf-8",
