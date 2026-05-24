@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { errorJson, zodError } from "@/lib/http";
+import { compileLlmWikiFromSources } from "@/lib/llm-wiki-workshop";
 import { createSource, getAdvisor, listSources } from "@/lib/store";
 import { type ListSourcesResponse, UpsertSourceBodySchema } from "@/lib/types";
 
@@ -28,5 +29,6 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return zodError(parsed.error as z.ZodError);
   const source = await createSource(id, parsed.data);
   if (!source) return errorJson("not_found", "Advisor not found", 404);
+  await compileLlmWikiFromSources(id);
   return Response.json({ source }, { status: 201 });
 }

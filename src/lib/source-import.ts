@@ -216,7 +216,7 @@ export async function importDocxSource(file: File, title?: string): Promise<Impo
     const fullText = result.value.trim();
 
     return {
-      kind: "text",
+      kind: "docx",
       title: inferredTitle,
       sourceUrl: file.name,
       body: withHeader(inferredTitle, "Word (.docx)", file.name, fullText),
@@ -225,7 +225,7 @@ export async function importDocxSource(file: File, title?: string): Promise<Impo
     };
   } catch (err) {
     return {
-      kind: "text",
+      kind: "docx",
       title: inferredTitle,
       sourceUrl: file.name,
       body: withHeader(

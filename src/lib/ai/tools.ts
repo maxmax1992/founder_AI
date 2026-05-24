@@ -1,21 +1,45 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { getAdvisorBrain, readAdvisorPage, searchAdvisorBrain } from "@/lib/store";
+import {
+  readAdvisorPage,
+  readFounderPage,
+  searchAdvisorBrain,
+  searchBuddyContext,
+  searchFounderBrain,
+} from "@/lib/store";
 
-export function advisorTools(advisorId: string) {
+export function buddyContextTools(advisorId: string, founderId: string) {
   return {
-    searchAdvisorWiki: tool({
+    searchBuddyContext: tool({
       description:
-        "Search the selected advisor brain across profile, vision, direction, memory, wiki pages, skills, and sources.",
+        "Search across selected advisor context and named founder context, using Graphify when enabled or the fallback graph skill when disabled.",
+      inputSchema: z.object({
+        query: z.string().min(1),
+      }),
+      execute: async ({ query }) => ({
+        results: await searchBuddyContext(advisorId, founderId, query),
+      }),
+    }),
+    searchAdvisorContext: tool({
+      description:
+        "Search only across the selected advisor context, including profile, vision, direction, wiki pages, fallback skill context when active, and sources.",
       inputSchema: z.object({
         query: z.string().min(1),
       }),
       execute: async ({ query }) => ({ results: await searchAdvisorBrain(advisorId, query) }),
     }),
+    searchFounderContext: tool({
+      description:
+        "Graphify-aware search only across the named founder graph, including founder profile, memory, and conversation-derived graph.",
+      inputSchema: z.object({
+        query: z.string().min(1),
+      }),
+      execute: async ({ query }) => ({ results: await searchFounderBrain(founderId, query) }),
+    }),
     readAdvisorPage: tool({
       description:
-        "Read one full advisor page by slug. Use slugs returned by searchAdvisorWiki or known slugs like profile, vision, direction, memory.",
+        "Read one full advisor page by slug. Use slugs returned by searchAdvisorContext or known slugs like profile, vision, direction, memory, and schema.",
       inputSchema: z.object({
         slug: z.string().min(1),
       }),
@@ -24,12 +48,15 @@ export function advisorTools(advisorId: string) {
         return page ? { found: true, page } : { found: false, slug };
       },
     }),
-    listAdvisorSkills: tool({
-      description: "List the selected advisor skills available for coaching behavior.",
-      inputSchema: z.object({}),
-      execute: async () => {
-        const brain = await getAdvisorBrain(advisorId);
-        return { skills: brain?.skills ?? [] };
+    readFounderPage: tool({
+      description:
+        "Read one full founder page by slug. Use slugs returned by searchFounderContext or known slugs like profile, memory, graph.",
+      inputSchema: z.object({
+        slug: z.string().min(1),
+      }),
+      execute: async ({ slug }) => {
+        const page = await readFounderPage(founderId, slug);
+        return page ? { found: true, page } : { found: false, slug };
       },
     }),
   };

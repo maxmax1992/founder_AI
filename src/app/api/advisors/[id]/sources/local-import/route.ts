@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { errorJson } from "@/lib/http";
+import { compileLlmWikiFromSources } from "@/lib/llm-wiki-workshop";
 import {
   buildTextSource,
   type ImportedSource,
@@ -65,6 +66,8 @@ export async function POST(req: Request, { params }: Params) {
         importedCount.failed++;
       }
     }
+
+    await compileLlmWikiFromSources(id);
 
     return Response.json({
       message: `Import complete. ${importedCount.success} succeeded, ${importedCount.failed} failed.`,

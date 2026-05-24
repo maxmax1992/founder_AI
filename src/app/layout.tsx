@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sprint Buddy",
-  description: "Advisor-backed Founder Sprint companion.",
+  title: "Founder's harness",
+  description: "Advisor-backed Founder Sprint harness.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

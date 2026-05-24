@@ -23,12 +23,19 @@ export interface Advisor {
   updatedAt: number;
 }
 
+export interface Founder {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface AdvisorSource {
   id: string;
   advisorId: string;
   title: string;
   body: string;
-  kind?: "text" | "website" | "youtube" | "pdf";
+  kind?: "text" | "website" | "youtube" | "pdf" | "docx";
   sourceUrl?: string;
   status?: "ready" | "needs_review" | "error";
   extractionNote?: string;
@@ -50,12 +57,18 @@ export interface AdvisorBrain {
   memory: string;
   schema: string;
   wikiPages: BrainPage[];
-  skills: BrainPage[];
+}
+
+export interface FounderBrain {
+  profile: string;
+  memory: string;
+  graph: string;
 }
 
 export interface Conversation {
   id: string;
   advisorId: string;
+  founderId?: string;
   title: string;
   createdAt: number;
   updatedAt: number;
@@ -82,11 +95,24 @@ export interface CheckinItem {
 }
 
 export interface SearchHit {
-  source: "profile" | "vision" | "direction" | "memory" | "schema" | "wiki" | "skill" | "source";
+  scope: "advisor" | "founder";
+  source:
+    | "profile"
+    | "vision"
+    | "direction"
+    | "memory"
+    | "schema"
+    | "graph"
+    | "wiki"
+    | "fallback_skill"
+    | "fallback_reference"
+    | "source";
   slug: string;
   title: string;
   excerpt: string;
   score: number;
+  retrieval?: "text" | "graph" | "hybrid";
+  relationships?: string[];
 }
 
 export interface ListAdvisorsResponse {
@@ -100,6 +126,11 @@ export interface AdvisorResponse {
 export interface AdvisorBrainResponse {
   advisor: Advisor;
   brain: AdvisorBrain;
+}
+
+export interface FounderBrainResponse {
+  founder: Founder;
+  brain: FounderBrain;
 }
 
 export interface ListSourcesResponse {
@@ -141,6 +172,7 @@ const uiMessageSchema: z.ZodType<AppUIMessage> = z.object({
 export const ChatRequestBodySchema = z.object({
   id: z.string().min(1),
   advisorId: z.string().min(1),
+  founderId: z.string().min(1).optional(),
   messages: z.array(uiMessageSchema).min(1),
   trigger: z.enum(["submit-message", "regenerate-message"]).optional(),
   messageId: z.string().optional(),
@@ -161,6 +193,13 @@ export const CreateAdvisorBodySchema = z.object({
 export const UpdateAdvisorBodySchema = z.object({
   name: z.string().min(1).max(80).optional(),
   description: z.string().max(240).optional(),
+});
+
+export const UpdateFounderBodySchema = z.object({
+  name: z.string().min(1).max(80).optional(),
+  profile: z.string().optional(),
+  memory: z.string().optional(),
+  graph: z.string().optional(),
 });
 
 const codexModelIds = CODEX_MODEL_OPTIONS.map((option) => option.id) as [
@@ -197,7 +236,7 @@ export const UpdateSettingsBodySchema = z.object({
 export const UpsertSourceBodySchema = z.object({
   title: z.string().min(1).max(120),
   body: z.string().min(1),
-  kind: z.enum(["text", "website", "youtube", "pdf"]).optional(),
+  kind: z.enum(["text", "website", "youtube", "pdf", "docx"]).optional(),
   sourceUrl: z.string().optional(),
   status: z.enum(["ready", "needs_review", "error"]).optional(),
   extractionNote: z.string().optional(),
@@ -210,14 +249,6 @@ export const UpdateBrainBodySchema = z.object({
   memory: z.string(),
   schema: z.string().optional(),
   wikiPages: z.array(
-    z.object({
-      slug: z.string().min(1).max(100),
-      title: z.string().min(1).max(120),
-      content: z.string(),
-      updatedAt: z.number().optional(),
-    }),
-  ),
-  skills: z.array(
     z.object({
       slug: z.string().min(1).max(100),
       title: z.string().min(1).max(120),

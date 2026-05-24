@@ -31,7 +31,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Markdown } from "@/components/ui/markdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
   type AppCheckinSettings,
@@ -56,6 +55,9 @@ import type {
   CheckinsResponse,
   Conversation,
   ConversationResponse,
+  Founder,
+  FounderBrain,
+  FounderBrainResponse,
   ListAdvisorsResponse,
   ListConversationsResponse,
   ListSourcesResponse,
@@ -68,20 +70,38 @@ const tabs: Array<{
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { id: "chat", label: "Buddy Chat", icon: MessageCircle },
+  { id: "chat", label: "Founder's Chat", icon: MessageCircle },
   { id: "advisor", label: "Advisor Editor", icon: UserCog },
   { id: "checkins", label: "Daily Check-ins", icon: ListChecks },
 ];
 
 type SourceKind = NonNullable<AdvisorSource["kind"]>;
-type AdvisorWorkspaceTab = "llm" | "wiki" | "skills" | "sources" | "workshop";
-type LlmWikiLayer = "sources" | "wiki" | "schema";
+type AdvisorWorkspaceTab = "llm" | "wiki" | "workshop";
+type LlmWikiLayer = "sources" | "wiki" | "core" | "schema" | "graph";
 type BrainSaveState = "idle" | "pending" | "saving" | "saved" | "error";
+
+interface GraphifyStatusResponse {
+  graphify: {
+    enabled: boolean;
+    forcedDisabled: boolean;
+    hasGraphifyOut: boolean;
+    hasHtml: boolean;
+    htmlFile: string | null;
+    hasGraphJson: boolean;
+    hasReport: boolean;
+  };
+  fallbackSkill: {
+    name: string;
+    summary: string;
+    relativePath: string;
+    references: Array<{ slug: string; title: string; relativePath: string }>;
+  } | null;
+}
 
 const BRAIN_AUTOSAVE_DELAY_MS = 800;
 
 const sourceKindOptions: Array<{
-  id: SourceKind | "docx";
+  id: SourceKind;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
@@ -169,11 +189,6 @@ async function importAdvisorSource(advisorId: string, formData: FormData) {
   return data.source;
 }
 
-function briefExcerpt(value: string, max = 360) {
-  const clean = value.replace(/\s+/g, " ").trim();
-  return clean.length > max ? `${clean.slice(0, max - 1)}...` : clean;
-}
-
 function shortRelativeTime(timestamp: number, now = Date.now()) {
   const diff = Math.max(0, now - timestamp);
   const minute = 60 * 1000;
@@ -193,39 +208,12 @@ function messageCreatedAt(message: AppUIMessage) {
   return typeof value === "number" && Number.isFinite(value) ? value : Date.now();
 }
 
-function advisorSkillMarkdown(title: string, brief: string, contextSources: AdvisorSource[]) {
-  const sourceNotes = contextSources
-    .slice(0, 5)
-    .map((source) => `- ${source.title}: ${briefExcerpt(source.body, 220)}`)
-    .join("\n");
-
-  return [
-    `# ${title}`,
-    "",
-    "## Trigger",
-    brief.trim() || "Use this when the founder needs a repeatable advisory move.",
-    "",
-    "## Source Notes",
-    sourceNotes || "- No source context attached yet.",
-    "",
-    "## Procedure",
-    "1. Name the situation in one plain sentence.",
-    "2. Apply the advisor principle from the source notes.",
-    "3. Ask one hard question that changes the founder's next decision.",
-    "4. End with one concrete action for the next 24 hours.",
-    "",
-    "## Response Shape",
-    "- Real issue",
-    "- Advisor lens",
-    "- Hard question",
-    "- Next action",
-  ].join("\n");
-}
-
 export function SprintBuddyShell() {
   const [activeTab, setActiveTab] = React.useState<AppTab>("chat");
   const [advisors, setAdvisors] = React.useState<Advisor[]>([]);
   const [advisorId, setAdvisorId] = React.useState<string>("");
+  const [founder, setFounder] = React.useState<Founder | null>(null);
+  const [founderBrain, setFounderBrain] = React.useState<FounderBrain | null>(null);
   const [conversations, setConversations] = React.useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = React.useState(() => generateId());
   const [conversationMessages, setConversationMessages] = React.useState<AppUIMessage[]>([]);
@@ -235,13 +223,16 @@ export function SprintBuddyShell() {
 
   const loadShellData = React.useCallback(async () => {
     try {
-      const [advisorData, settingsData] = await Promise.all([
+      const [advisorData, settingsData, founderData] = await Promise.all([
         jsonFetch<ListAdvisorsResponse>("/api/advisors"),
         jsonFetch<SettingsResponse>("/api/settings"),
+        jsonFetch<FounderBrainResponse>("/api/founders/default"),
       ]);
       setAdvisors(advisorData.advisors);
       setAdvisorId((current) => current || advisorData.advisors[0]?.id || "");
       setSettings(settingsData.settings);
+      setFounder(founderData.founder);
+      setFounderBrain(founderData.brain);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load app state");
@@ -367,6 +358,28 @@ export function SprintBuddyShell() {
     [loadShellData, settings],
   );
 
+  const updateFounderSettings = React.useCallback(
+    async (patch: { name?: string; profile?: string }) => {
+      if (patch.name !== undefined && founder) setFounder({ ...founder, name: patch.name });
+      if (patch.profile !== undefined && founderBrain) {
+        setFounderBrain({ ...founderBrain, profile: patch.profile });
+      }
+      try {
+        const data = await jsonFetch<FounderBrainResponse>("/api/founders/default", {
+          method: "PATCH",
+          body: JSON.stringify(patch),
+        });
+        setFounder(data.founder);
+        setFounderBrain(data.brain);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to save founder profile");
+        void loadShellData();
+      }
+    },
+    [founder, founderBrain, loadShellData],
+  );
+
   const selectedAdvisor = advisors.find((advisor) => advisor.id === advisorId) ?? null;
   const selectedModel = CODEX_MODEL_OPTIONS.find(
     (option) => option.id === (settings?.model.model ?? DEFAULT_APP_MODEL_SETTINGS.model),
@@ -381,10 +394,13 @@ export function SprintBuddyShell() {
           advisorId={advisorId}
           activeConversationId={activeConversationId}
           conversations={conversations}
+          founder={founder}
+          founderBrain={founderBrain}
           settings={settings}
           onAdvisorChange={selectAdvisor}
           onCheckinSettingsChange={(patch) => void updateCheckinSettings(patch)}
           onConversationSelect={(conversationId) => void openConversation(conversationId)}
+          onFounderChange={(patch) => void updateFounderSettings(patch)}
           onModelSettingsChange={(patch) => void updateModelSettings(patch)}
           onNewConversation={() => {
             resetConversation();
@@ -399,9 +415,12 @@ export function SprintBuddyShell() {
           activeTab={activeTab}
           advisors={advisors}
           advisorId={advisorId}
+          founder={founder}
+          founderBrain={founderBrain}
           settings={settings}
           onAdvisorChange={selectAdvisor}
           onCheckinSettingsChange={(patch) => void updateCheckinSettings(patch)}
+          onFounderChange={(patch) => void updateFounderSettings(patch)}
           onModelSettingsChange={(patch) => void updateModelSettings(patch)}
           onTabChange={setActiveTab}
         />
@@ -417,14 +436,14 @@ export function SprintBuddyShell() {
                   {selectedAdvisor ? selectedAdvisor.name : "Choose an advisor"}
                 </div>
                 <div className="mt-[2px] font-mono text-[10.5px] text-fg-4 max-w-[240px] truncate">
-                  {selectedAdvisor?.description || "Sprint Buddy Advisor"}
+                  {selectedAdvisor?.description || "Founder's harness advisor"}
                 </div>
               </div>
             </div>
           ) : (
             <div className="min-w-0">
               <p className="text-xs font-mono font-medium tracking-wider uppercase text-fg-4">
-                Sprint Buddy
+                Founder's harness
               </p>
               <h1 className="truncate text-base font-semibold text-foreground">
                 {activeTab === "advisor" ? "Advisor Editor" : "Daily Check-ins"}
@@ -449,9 +468,10 @@ export function SprintBuddyShell() {
 
         <div className="min-h-0 flex-1 flex flex-col">
           {activeTab === "chat" && (
-            <BuddyChat
+            <FoundersChat
               key={`${selectedAdvisor?.id ?? "none"}-${activeConversationId}`}
               advisor={selectedAdvisor}
+              founder={founder}
               conversationId={activeConversationId}
               initialMessages={conversationMessages}
               onConversationUpdated={() => void loadConversations(advisorId)}
@@ -486,10 +506,13 @@ function Sidebar({
   advisorId,
   activeConversationId,
   conversations,
+  founder,
+  founderBrain,
   settings,
   onAdvisorChange,
   onCheckinSettingsChange,
   onConversationSelect,
+  onFounderChange,
   onModelSettingsChange,
   onNewConversation,
   onTabChange,
@@ -499,10 +522,13 @@ function Sidebar({
   advisorId: string;
   activeConversationId: string;
   conversations: Conversation[];
+  founder: Founder | null;
+  founderBrain: FounderBrain | null;
   settings: AppSettings | null;
   onAdvisorChange: (id: string) => void;
   onCheckinSettingsChange: (patch: Partial<AppCheckinSettings>) => void;
   onConversationSelect: (id: string) => void;
+  onFounderChange: (patch: { name?: string; profile?: string }) => void;
   onModelSettingsChange: (patch: Partial<AppModelSettings>) => void;
   onNewConversation: () => void;
   onTabChange: (tab: AppTab) => void;
@@ -513,12 +539,9 @@ function Sidebar({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-[10px] px-5 py-5 pb-[18px]">
-        <div className="grid h-[22px] w-[22px] place-items-center rounded-[6px] bg-brand font-serif text-[14px] italic leading-none text-brand-foreground">
-          s
-        </div>
-        <div className="font-sans text-[14px] font-medium tracking-[-0.005em] text-foreground">
-          Sprint Buddy
+      <div className="px-5 py-5 pb-[18px]">
+        <div className="font-serif text-[21px] italic leading-none tracking-normal text-foreground text-balance">
+          Founder's harness
         </div>
       </div>
 
@@ -639,19 +662,22 @@ function Sidebar({
 
       <SettingsDialog
         open={isSettingsOpen}
+        founder={founder}
+        founderBrain={founderBrain}
         settings={settings}
         onClose={() => setIsSettingsOpen(false)}
         onCheckinSettingsChange={onCheckinSettingsChange}
+        onFounderChange={onFounderChange}
         onModelSettingsChange={onModelSettingsChange}
       />
 
       <div className="mt-auto flex items-center gap-[10px] border-t border-line-soft px-5 py-[14px]">
         <div className="grid h-7 w-7 place-items-center rounded-full bg-[oklch(0.55_0.06_50)] font-sans text-[12px] font-medium text-[oklch(0.98_0.01_80)]">
-          A
+          {founder?.name?.[0] ?? "F"}
         </div>
         <div>
-          <div className="text-[13px] text-foreground">Aino Virtanen</div>
-          <div className="mt-[1px] font-mono text-[10.5px] text-fg-4">Quanta Health</div>
+          <div className="text-[13px] text-foreground">{founder?.name ?? "Local Founder"}</div>
+          <div className="mt-[1px] font-mono text-[10.5px] text-fg-4">private graph</div>
         </div>
       </div>
     </div>
@@ -662,9 +688,12 @@ function MobileBar(props: {
   activeTab: AppTab;
   advisors: Advisor[];
   advisorId: string;
+  founder: Founder | null;
+  founderBrain: FounderBrain | null;
   settings: AppSettings | null;
   onAdvisorChange: (id: string) => void;
   onCheckinSettingsChange: (patch: Partial<AppCheckinSettings>) => void;
+  onFounderChange: (patch: { name?: string; profile?: string }) => void;
   onModelSettingsChange: (patch: Partial<AppModelSettings>) => void;
   onTabChange: (tab: AppTab) => void;
 }) {
@@ -705,9 +734,12 @@ function MobileBar(props: {
       </Button>
       <SettingsDialog
         open={isSettingsOpen}
+        founder={props.founder}
+        founderBrain={props.founderBrain}
         settings={props.settings}
         onClose={() => setIsSettingsOpen(false)}
         onCheckinSettingsChange={props.onCheckinSettingsChange}
+        onFounderChange={props.onFounderChange}
         onModelSettingsChange={props.onModelSettingsChange}
       />
     </div>
@@ -716,15 +748,21 @@ function MobileBar(props: {
 
 function SettingsDialog({
   open,
+  founder,
+  founderBrain,
   settings,
   onClose,
   onCheckinSettingsChange,
+  onFounderChange,
   onModelSettingsChange,
 }: {
   open: boolean;
+  founder: Founder | null;
+  founderBrain: FounderBrain | null;
   settings: AppSettings | null;
   onClose: () => void;
   onCheckinSettingsChange: (patch: Partial<AppCheckinSettings>) => void;
+  onFounderChange: (patch: { name?: string; profile?: string }) => void;
   onModelSettingsChange: (patch: Partial<AppModelSettings>) => void;
 }) {
   if (!open) return null;
@@ -742,7 +780,7 @@ function SettingsDialog({
             <h2 id="settings-title" className="text-base font-semibold">
               Settings
             </h2>
-            <p className="text-muted-foreground text-xs">Sprint Buddy</p>
+            <p className="text-muted-foreground text-xs">Founder's harness</p>
           </div>
           <Button type="button" variant="ghost" size="icon" onClick={onClose}>
             <X className="size-4" />
@@ -750,11 +788,67 @@ function SettingsDialog({
           </Button>
         </div>
         <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-          <ModelSettingsControls settings={settings} onChange={onModelSettingsChange} />
+          <div className="grid gap-4">
+            <FounderSettingsControls
+              founder={founder}
+              founderBrain={founderBrain}
+              onChange={onFounderChange}
+            />
+            <ModelSettingsControls settings={settings} onChange={onModelSettingsChange} />
+          </div>
           <CheckinSettingsControls settings={settings} onChange={onCheckinSettingsChange} />
         </div>
       </section>
     </div>
+  );
+}
+
+function FounderSettingsControls({
+  founder,
+  founderBrain,
+  onChange,
+}: {
+  founder: Founder | null;
+  founderBrain: FounderBrain | null;
+  onChange: (patch: { name?: string; profile?: string }) => void;
+}) {
+  return (
+    <section className="border-border bg-background rounded-md border p-3">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+          Founder profile
+        </p>
+        <span className="text-muted-foreground font-mono text-xs">private</span>
+      </div>
+      <label
+        htmlFor="founder-name-input"
+        className="text-muted-foreground mb-1 block text-xs font-medium tracking-wider uppercase"
+      >
+        Name
+      </label>
+      <Input
+        id="founder-name-input"
+        value={founder?.name ?? ""}
+        disabled={!founder}
+        onChange={(event) => onChange({ name: event.target.value })}
+        placeholder="Founder name"
+        className="h-8 text-sm"
+      />
+      <label
+        htmlFor="founder-profile-input"
+        className="text-muted-foreground mt-3 mb-1 block text-xs font-medium tracking-wider uppercase"
+      >
+        Context
+      </label>
+      <Textarea
+        id="founder-profile-input"
+        value={founderBrain?.profile ?? ""}
+        disabled={!founderBrain}
+        onChange={(event) => onChange({ profile: event.target.value })}
+        placeholder="Private founder profile and context"
+        className="min-h-24 font-mono text-xs"
+      />
+    </section>
   );
 }
 
@@ -906,13 +1000,15 @@ function ModelSettingsControls({
   );
 }
 
-function BuddyChat({
+function FoundersChat({
   advisor,
+  founder,
   conversationId,
   initialMessages,
   onConversationUpdated,
 }: {
   advisor: Advisor | null;
+  founder: Founder | null;
   conversationId: string;
   initialMessages: AppUIMessage[];
   onConversationUpdated: () => void;
@@ -921,9 +1017,9 @@ function BuddyChat({
     () =>
       new DefaultChatTransport<AppUIMessage>({
         api: "/api/chat",
-        body: () => ({ advisorId: advisor?.id ?? "" }),
+        body: () => ({ advisorId: advisor?.id ?? "", founderId: founder?.id }),
       }),
-    [advisor?.id],
+    [advisor?.id, founder?.id],
   );
 
   const { messages, setMessages, sendMessage, status, error, regenerate, clearError } =
@@ -1122,6 +1218,11 @@ function BuddyChat({
                 </div>
                 <div className="flex items-center gap-[10px]">
                   <span className="font-mono text-[10px] tracking-[0.08em] text-fg-4">private</span>
+                  {founder && (
+                    <span className="font-mono text-[10px] tracking-[0.08em] text-fg-4">
+                      {founder.name}
+                    </span>
+                  )}
                   <button
                     type="submit"
                     disabled={!input.trim() || isBusy}
@@ -1138,7 +1239,9 @@ function BuddyChat({
 
       <aside className="hidden lg:block w-[320px] overflow-y-auto border-l border-line-soft pb-6 scrollbar-thin scrollbar-thumb-line scrollbar-track-transparent flex-shrink-0 bg-background">
         <div className="border-b border-line-soft px-5 pt-5 pb-3.5">
-          <h2 className="m-0 text-[14px] font-medium text-foreground">What buddy noticed</h2>
+          <h2 className="m-0 text-[14px] font-medium text-foreground">
+            What Founder&apos;s Chat noticed
+          </h2>
           <div className="mt-1 font-mono text-[10.5px] text-fg-4">7 days · only you see this</div>
         </div>
 
@@ -1300,7 +1403,7 @@ function MessageList({ messages, advisor }: { messages: AppUIMessage[]; advisor:
                 What are you <em>pretending</em> not to know?
               </div>
               <div className="mt-2 text-[12.5px] leading-[1.5] text-fg-3">
-                One sentence is enough. No one sees this but you and the buddy.
+                One sentence is enough. No one sees this but you and Founder&apos;s Chat.
               </div>
               <div className="mt-3.5 flex flex-wrap gap-1.5">
                 <button
@@ -1403,50 +1506,61 @@ function AdvisorEditor({
   };
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)]">
-      <aside className="border-border bg-muted/30 min-h-0 border-b p-4 lg:border-r lg:border-b-0">
-        <h2 className="text-sm font-semibold">Advisors</h2>
-        <div className="mt-3 flex flex-col gap-2">
-          {advisors.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onAdvisorSelected(item.id)}
-              aria-pressed={item.id === advisor?.id}
-              className={cn(
-                "border-border bg-background hover:bg-muted focus-visible:ring-ring/50 w-full rounded-md border p-3 text-left transition-colors outline-none focus-visible:ring-2",
-                item.id === advisor?.id && "border-brand/50 bg-brand-muted",
-              )}
-            >
-              <p className="text-sm font-medium">{item.name}</p>
-              <p className="text-muted-foreground mt-1 line-clamp-2 text-xs">{item.description}</p>
-            </button>
-          ))}
+    <div className="flex h-full min-h-0 flex-col">
+      <section className="border-border bg-muted/20 flex shrink-0 flex-col gap-2 border-b px-5 py-3 md:flex-row md:items-end md:justify-between">
+        <div className="grid min-w-0 flex-1 gap-1 md:max-w-[520px]">
+          <label
+            htmlFor="advisor-editor-select"
+            className="font-mono text-[10px] font-medium tracking-[0.14em] text-muted-foreground uppercase"
+          >
+            Advisor
+          </label>
+          <select
+            id="advisor-editor-select"
+            value={advisor?.id ?? ""}
+            onChange={(event) => onAdvisorSelected(event.target.value)}
+            className="border-border bg-background focus-visible:ring-ring/50 h-9 w-full rounded-md border px-3 text-sm text-foreground outline-none focus-visible:ring-2"
+          >
+            <option value="" disabled>
+              Choose an advisor
+            </option>
+            {advisors.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
         </div>
-        <Separator className="my-4" />
-        <Button className="w-full" variant="outline" onClick={() => setIsCreateOpen(true)}>
+        {advisor?.description && (
+          <p className="text-muted-foreground min-w-0 flex-1 truncate text-sm md:pb-2">
+            {advisor.description}
+          </p>
+        )}
+        <Button className="shrink-0" variant="outline" onClick={() => setIsCreateOpen(true)}>
           <Plus className="size-4" />
           Add advisor
         </Button>
-      </aside>
+      </section>
       <CreateAdvisorDialog
         open={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
         onCreate={create}
       />
-      {advisor ? (
-        <AdvisorWorkspace
-          key={advisor.id}
-          advisor={advisor}
-          onAdvisorDeleted={onAdvisorDeleted}
-          onAdvisorUpdated={onAdvisorUpdated}
-        />
-      ) : (
-        <EmptyPanel
-          title="No advisor selected"
-          body="Create or select an advisor to edit its brain."
-        />
-      )}
+      <div className="min-h-0 flex-1">
+        {advisor ? (
+          <AdvisorWorkspace
+            key={advisor.id}
+            advisor={advisor}
+            onAdvisorDeleted={onAdvisorDeleted}
+            onAdvisorUpdated={onAdvisorUpdated}
+          />
+        ) : (
+          <EmptyPanel
+            title="No advisor selected"
+            body="Create or select an advisor to edit its brain."
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -1561,7 +1675,6 @@ function AdvisorWorkspace({
   const [selectedSourceId, setSelectedSourceId] = React.useState("");
   const [status, setStatus] = React.useState("");
   const [brainSaveState, setBrainSaveState] = React.useState<BrainSaveState>("idle");
-  const [isSkillCreatorOpen, setIsSkillCreatorOpen] = React.useState(false);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = React.useState<AdvisorWorkspaceTab>("llm");
   const lastSavedBrainRef = React.useRef("");
   const latestBrainRef = React.useRef<AdvisorBrain | null>(null);
@@ -1720,18 +1833,21 @@ function AdvisorWorkspace({
     icon: React.ComponentType<{ className?: string }>;
   }> = [
     { id: "llm", label: "Advisor LLM", meta: "4", icon: UserCog },
-    { id: "wiki", label: "Wiki", meta: String(brain.wikiPages.length), icon: BookOpen },
-    { id: "skills", label: "Skills", meta: String(brain.skills.length), icon: Sparkles },
-    { id: "sources", label: "Sources", meta: String(sources.length), icon: Folder },
-    { id: "workshop", label: "Workshop", meta: "AI", icon: MessageCircle },
+    {
+      id: "wiki",
+      label: "Wiki",
+      meta: `${brain.wikiPages.length}/${sources.length}`,
+      icon: BookOpen,
+    },
+    { id: "workshop", label: "Manager", meta: "AI", icon: MessageCircle },
   ];
 
   return (
     <ScrollArea className="h-full min-h-0">
-      <div className="space-y-5 p-5">
+      <div className="flex h-full min-h-full flex-col gap-5 p-5">
         <section
           aria-label="Advisor metadata"
-          className="border-border bg-card rounded-lg border p-3"
+          className="border-border bg-card shrink-0 rounded-lg border p-3"
         >
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto] lg:items-end">
             <label htmlFor="selected-advisor-name" className="grid gap-1 text-sm font-medium">
@@ -1771,12 +1887,12 @@ function AdvisorWorkspace({
 
         <section
           aria-label="Advisor editor sections"
-          className="border-border bg-card rounded-md border p-2"
+          className="border-border bg-card shrink-0 rounded-md border p-2"
         >
           <div
             role="tablist"
             aria-label="Advisor editor sections"
-            className="grid gap-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5"
+            className="grid gap-1 sm:grid-cols-2 xl:grid-cols-3"
           >
             {workspaceTabs.map((tab) => {
               const Icon = tab.icon;
@@ -1820,35 +1936,35 @@ function AdvisorWorkspace({
           role="tabpanel"
           aria-labelledby="advisor-editor-tab-llm"
           hidden={activeWorkspaceTab !== "llm"}
-          className="space-y-4"
+          className="flex min-h-[520px] flex-1 flex-col gap-4"
         >
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-2">
             <EditorCard title="Profile">
               <Textarea
                 value={brain.profile}
                 onChange={(event) => setBrain({ ...brain, profile: event.target.value })}
-                className="min-h-44 font-mono text-sm"
+                className="min-h-44 flex-1 font-mono text-sm"
               />
             </EditorCard>
             <EditorCard title="Vision">
               <Textarea
                 value={brain.vision}
                 onChange={(event) => setBrain({ ...brain, vision: event.target.value })}
-                className="min-h-44 font-mono text-sm"
+                className="min-h-44 flex-1 font-mono text-sm"
               />
             </EditorCard>
             <EditorCard title="Direction">
               <Textarea
                 value={brain.direction}
                 onChange={(event) => setBrain({ ...brain, direction: event.target.value })}
-                className="min-h-44 font-mono text-sm"
+                className="min-h-44 flex-1 font-mono text-sm"
               />
             </EditorCard>
-            <EditorCard title="Founder Memory">
+            <EditorCard title="Advisor Memory">
               <Textarea
                 value={brain.memory}
                 onChange={(event) => setBrain({ ...brain, memory: event.target.value })}
-                className="min-h-44 font-mono text-sm"
+                className="min-h-44 flex-1 font-mono text-sm"
               />
             </EditorCard>
           </div>
@@ -1860,55 +1976,21 @@ function AdvisorWorkspace({
           role="tabpanel"
           aria-labelledby="advisor-editor-tab-wiki"
           hidden={activeWorkspaceTab !== "wiki"}
-          className="space-y-4"
+          className="flex min-h-[520px] flex-1 flex-col"
         >
           <LlmWikiEditor
             brain={brain}
+            advisorId={advisor.id}
             sources={sources}
             selectedSource={selectedSource}
             onBrainChange={setBrain}
             onSourceSelect={setSelectedSourceId}
-            onOpenSources={() => setActiveWorkspaceTab("sources")}
-            onSaveBrain={saveBrain}
-            saveState={brainSaveState}
-          />
-        </section>
-
-        <section
-          id="advisor-editor-panel-skills"
-          role="tabpanel"
-          aria-labelledby="advisor-editor-tab-skills"
-          hidden={activeWorkspaceTab !== "skills"}
-          className="space-y-4"
-        >
-          <PageCollectionEditor
-            title="Advisor Skills"
-            pages={brain.skills}
-            addLabel="Skill creator"
-            addIcon={Sparkles}
-            onAdd={() => setIsSkillCreatorOpen(true)}
-            onChange={(skills) => setBrain({ ...brain, skills })}
-          />
-          <SaveBrainRow onSave={saveBrain} saveState={brainSaveState} />
-        </section>
-
-        <section
-          id="advisor-editor-panel-sources"
-          role="tabpanel"
-          aria-labelledby="advisor-editor-tab-sources"
-          hidden={activeWorkspaceTab !== "sources"}
-        >
-          <SourcesEditor
-            advisorId={advisor.id}
-            sources={sources}
-            selectedSource={selectedSource}
-            onSelect={setSelectedSourceId}
-            onChangeSelected={(source) =>
+            onSourceChangeSelected={(source) =>
               setSources((items) => items.map((item) => (item.id === source.id ? source : item)))
             }
-            onSaveSelected={saveSource}
-            onDelete={deleteSourceById}
-            onImported={async (source) => {
+            onSourceSaveSelected={saveSource}
+            onSourceDelete={deleteSourceById}
+            onSourceImported={async (source) => {
               if (source) setSelectedSourceId(source.id);
               await load();
               setStatus(
@@ -1917,6 +1999,8 @@ function AdvisorWorkspace({
                   : "Source imported.",
               );
             }}
+            onSaveBrain={saveBrain}
+            saveState={brainSaveState}
           />
         </section>
 
@@ -1925,26 +2009,10 @@ function AdvisorWorkspace({
           role="tabpanel"
           aria-labelledby="advisor-editor-tab-workshop"
           hidden={activeWorkspaceTab !== "workshop"}
+          className="flex min-h-[520px] flex-1 flex-col"
         >
           <WorkshopChat advisor={advisor} />
         </section>
-        <SkillCreatorDialog
-          advisor={advisor}
-          open={isSkillCreatorOpen}
-          sources={sources}
-          existingSkills={brain.skills}
-          onClose={() => setIsSkillCreatorOpen(false)}
-          onSourceImported={async (source) => {
-            setSelectedSourceId(source.id);
-            await load();
-          }}
-          onInsertSkill={(page) => {
-            setBrain((current) =>
-              current ? { ...current, skills: [...current.skills, page] } : current,
-            );
-            setStatus("Skill draft inserted.");
-          }}
-        />
       </div>
     </ScrollArea>
   );
@@ -1970,26 +2038,36 @@ function SaveBrainRow({
 
 function LlmWikiEditor({
   brain,
+  advisorId,
   sources,
   selectedSource,
   onBrainChange,
   onSourceSelect,
-  onOpenSources,
+  onSourceChangeSelected,
+  onSourceSaveSelected,
+  onSourceDelete,
+  onSourceImported,
   onSaveBrain,
   saveState,
 }: {
   brain: AdvisorBrain;
+  advisorId: string;
   sources: AdvisorSource[];
   selectedSource: AdvisorSource | null;
   onBrainChange: (brain: AdvisorBrain) => void;
   onSourceSelect: (id: string) => void;
-  onOpenSources: () => void;
+  onSourceChangeSelected: (source: AdvisorSource) => void;
+  onSourceSaveSelected: () => void | Promise<void>;
+  onSourceDelete: (id: string) => void | Promise<void>;
+  onSourceImported: (source: AdvisorSource) => void | Promise<void>;
   onSaveBrain: () => void | Promise<void>;
   saveState: BrainSaveState;
 }) {
   const [layer, setLayer] = React.useState<LlmWikiLayer>("wiki");
   const [showFiles, setShowFiles] = React.useState(true);
   const [selectedWikiSlug, setSelectedWikiSlug] = React.useState(brain.wikiPages[0]?.slug ?? "");
+  const [graphifyStatus, setGraphifyStatus] = React.useState<GraphifyStatusResponse | null>(null);
+  const [graphifyStatusError, setGraphifyStatusError] = React.useState("");
 
   React.useEffect(() => {
     if (layer !== "wiki") return;
@@ -1997,8 +2075,36 @@ function LlmWikiEditor({
     setSelectedWikiSlug(brain.wikiPages[0]?.slug ?? "");
   }, [brain.wikiPages, layer, selectedWikiSlug]);
 
+  React.useEffect(() => {
+    if (layer !== "graph") return;
+    let cancelled = false;
+    jsonFetch<GraphifyStatusResponse>("/api/graphify/status")
+      .then((data) => {
+        if (!cancelled) {
+          setGraphifyStatus(data);
+          setGraphifyStatusError("");
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setGraphifyStatus(null);
+          setGraphifyStatusError(
+            err instanceof Error ? err.message : "Failed to load Graphify status",
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [layer]);
+
   const selectedWikiIndex = brain.wikiPages.findIndex((page) => page.slug === selectedWikiSlug);
   const selectedWikiPage = selectedWikiIndex >= 0 ? brain.wikiPages[selectedWikiIndex] : null;
+  const graphifyUsable = Boolean(
+    graphifyStatus?.graphify.enabled &&
+      graphifyStatus.graphify.hasGraphifyOut &&
+      (graphifyStatus.graphify.hasHtml || graphifyStatus.graphify.hasGraphJson),
+  );
 
   const layers: Array<{
     id: LlmWikiLayer;
@@ -2007,8 +2113,15 @@ function LlmWikiEditor({
     icon: React.ComponentType<{ className?: string }>;
   }> = [
     { id: "sources", label: "Raw sources", meta: String(sources.length), icon: FileText },
-    { id: "wiki", label: "The wiki", meta: String(brain.wikiPages.length), icon: BookOpen },
-    { id: "schema", label: "The schema", meta: "md", icon: Settings },
+    { id: "wiki", label: "Wiki pages", meta: String(brain.wikiPages.length), icon: BookOpen },
+    { id: "core", label: "Core nodes", meta: "4", icon: UserCog },
+    { id: "schema", label: "Schema", meta: "md", icon: Settings },
+    {
+      id: "graph",
+      label: "Graph",
+      meta: graphifyUsable ? "on" : "fallback",
+      icon: Circle,
+    },
   ];
 
   const updateWikiPage = (index: number, patch: Partial<BrainPage>) => {
@@ -2046,10 +2159,8 @@ function LlmWikiEditor({
     setSelectedWikiSlug(nextPages[0]?.slug ?? "");
   };
 
-  const selectedSourceFile = selectedSource ? `${selectedSource.id}.md` : "No source selected";
-
   return (
-    <section className="border-border bg-card rounded-lg border">
+    <section className="border-border bg-card flex min-h-0 flex-1 flex-col rounded-lg border">
       <div className="border-border flex flex-wrap items-center justify-between gap-3 border-b p-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Button
@@ -2059,12 +2170,12 @@ function LlmWikiEditor({
             onClick={() => setShowFiles((current) => !current)}
           >
             <Folder className="size-4" />
-            Files
+            Library
           </Button>
           <div
             role="tablist"
             aria-label="LLM Wiki layers"
-            className="border-border grid overflow-hidden rounded-md border sm:grid-cols-3"
+            className="border-border grid overflow-hidden rounded-md border sm:grid-cols-2 lg:grid-cols-5"
           >
             {layers.map((item) => {
               const Icon = item.icon;
@@ -2094,12 +2205,12 @@ function LlmWikiEditor({
         <SaveBrainRow onSave={onSaveBrain} saveState={saveState} />
       </div>
 
-      <div className={cn("grid min-h-[520px]", showFiles && "lg:grid-cols-[260px_minmax(0,1fr)]")}>
+      <div className={cn("grid min-h-0 flex-1", showFiles && "lg:grid-cols-[260px_minmax(0,1fr)]")}>
         {showFiles && (
           <aside className="border-border bg-muted/20 min-h-0 border-b p-3 lg:border-r lg:border-b-0">
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-                Files
+                Library
               </p>
               {layer === "wiki" && (
                 <Button type="button" variant="outline" size="sm" onClick={addWikiPage}>
@@ -2162,60 +2273,64 @@ function LlmWikiEditor({
                   <span className="text-muted-foreground mt-0.5 block truncate">The schema</span>
                 </button>
               )}
+              {layer === "core" &&
+                [
+                  ["profile", "Advisor Profile"],
+                  ["vision", "Vision"],
+                  ["direction", "Direction"],
+                  ["memory", "Advisor Memory"],
+                ].map(([slug, title]) => (
+                  <button
+                    key={slug}
+                    type="button"
+                    className="border-brand/60 bg-brand-muted w-full rounded-md border px-2 py-2 text-left text-xs"
+                  >
+                    <span className="block truncate font-mono">{slug}.md</span>
+                    <span className="text-muted-foreground mt-0.5 block truncate">{title}</span>
+                  </button>
+                ))}
+              {layer === "graph" && (
+                <>
+                  <button
+                    type="button"
+                    className="border-brand/60 bg-brand-muted w-full rounded-md border px-2 py-2 text-left text-xs"
+                  >
+                    <span className="block truncate font-mono">graphify-out</span>
+                    <span className="text-muted-foreground mt-0.5 block truncate">
+                      Preferred graph UX
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="border-border/70 w-full rounded-md border px-2 py-2 text-left text-xs"
+                  >
+                    <span className="block truncate font-mono">.skills/graph_fallback</span>
+                    <span className="text-muted-foreground mt-0.5 block truncate">
+                      Disabled fallback
+                    </span>
+                  </button>
+                </>
+              )}
             </div>
           </aside>
         )}
 
-        <div className="min-w-0 p-3">
+        <div className="min-h-0 min-w-0 p-3">
           {layer === "sources" && (
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-muted-foreground font-mono text-xs">{selectedSourceFile}</p>
-                  <h3 className="truncate text-sm font-semibold">
-                    {selectedSource?.title ?? "Raw sources"}
-                  </h3>
-                </div>
-                <Button type="button" variant="outline" size="sm" onClick={onOpenSources}>
-                  <FolderPlus className="size-4" />
-                  Sources
-                </Button>
-              </div>
-              {selectedSource ? (
-                <>
-                  <div className="flex flex-wrap gap-2 text-xs">
-                    <span className="border-border bg-background rounded-md border px-2 py-1">
-                      {selectedSource.kind ?? "text"}
-                    </span>
-                    <span
-                      className={cn(
-                        "border-border bg-background rounded-md border px-2 py-1",
-                        selectedSource.status === "needs_review" &&
-                          "border-destructive/30 bg-destructive/10 text-destructive",
-                      )}
-                    >
-                      {selectedSource.status ?? "ready"}
-                    </span>
-                    {selectedSource.sourceUrl && (
-                      <span className="border-border bg-background text-muted-foreground max-w-full truncate rounded-md border px-2 py-1">
-                        {selectedSource.sourceUrl}
-                      </span>
-                    )}
-                  </div>
-                  <Textarea
-                    readOnly
-                    value={selectedSource.body}
-                    className="min-h-[420px] resize-y bg-muted/20 font-mono text-sm"
-                  />
-                </>
-              ) : (
-                <EmptyPanel title="No source selected" body="Add or select a raw source." />
-              )}
-            </div>
+            <SourcesEditor
+              advisorId={advisorId}
+              sources={sources}
+              selectedSource={selectedSource}
+              onSelect={onSourceSelect}
+              onChangeSelected={onSourceChangeSelected}
+              onSaveSelected={onSourceSaveSelected}
+              onDelete={onSourceDelete}
+              onImported={onSourceImported}
+            />
           )}
 
           {layer === "wiki" && (
-            <div className="space-y-3">
+            <div className="flex h-full min-h-0 flex-col gap-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-muted-foreground font-mono text-xs">
@@ -2258,7 +2373,7 @@ function LlmWikiEditor({
                     onChange={(event) =>
                       updateWikiPage(selectedWikiIndex, { content: event.target.value })
                     }
-                    className="min-h-[420px] resize-y font-mono text-sm"
+                    className="min-h-[420px] flex-1 resize-y font-mono text-sm"
                   />
                 </>
               ) : (
@@ -2268,7 +2383,7 @@ function LlmWikiEditor({
           )}
 
           {layer === "schema" && (
-            <div className="space-y-3">
+            <div className="flex h-full min-h-0 flex-col gap-3">
               <div className="min-w-0">
                 <p className="text-muted-foreground font-mono text-xs">schema.md</p>
                 <h3 className="truncate text-sm font-semibold">The schema</h3>
@@ -2276,9 +2391,46 @@ function LlmWikiEditor({
               <Textarea
                 value={brain.schema}
                 onChange={(event) => onBrainChange({ ...brain, schema: event.target.value })}
-                className="min-h-[500px] resize-y font-mono text-sm"
+                className="min-h-[500px] flex-1 resize-y font-mono text-sm"
               />
             </div>
+          )}
+
+          {layer === "core" && (
+            <div className="grid h-full min-h-0 gap-3 xl:grid-cols-2">
+              <EditorCard title="Profile">
+                <Textarea
+                  value={brain.profile}
+                  onChange={(event) => onBrainChange({ ...brain, profile: event.target.value })}
+                  className="min-h-44 flex-1 font-mono text-sm"
+                />
+              </EditorCard>
+              <EditorCard title="Vision">
+                <Textarea
+                  value={brain.vision}
+                  onChange={(event) => onBrainChange({ ...brain, vision: event.target.value })}
+                  className="min-h-44 flex-1 font-mono text-sm"
+                />
+              </EditorCard>
+              <EditorCard title="Direction">
+                <Textarea
+                  value={brain.direction}
+                  onChange={(event) => onBrainChange({ ...brain, direction: event.target.value })}
+                  className="min-h-44 flex-1 font-mono text-sm"
+                />
+              </EditorCard>
+              <EditorCard title="Advisor Memory">
+                <Textarea
+                  value={brain.memory}
+                  onChange={(event) => onBrainChange({ ...brain, memory: event.target.value })}
+                  className="min-h-44 flex-1 font-mono text-sm"
+                />
+              </EditorCard>
+            </div>
+          )}
+
+          {layer === "graph" && (
+            <GraphifyLayer status={graphifyStatus} error={graphifyStatusError} />
           )}
         </div>
       </div>
@@ -2286,388 +2438,113 @@ function LlmWikiEditor({
   );
 }
 
-function SkillCreatorDialog({
-  advisor,
-  open,
-  sources,
-  existingSkills,
-  onClose,
-  onSourceImported,
-  onInsertSkill,
+function GraphifyLayer({
+  status,
+  error,
 }: {
-  advisor: Advisor;
-  open: boolean;
-  sources: AdvisorSource[];
-  existingSkills: BrainPage[];
-  onClose: () => void;
-  onSourceImported: (source: AdvisorSource) => void | Promise<void>;
-  onInsertSkill: (page: BrainPage) => void;
+  status: GraphifyStatusResponse | null;
+  error: string;
 }) {
-  const transport = React.useMemo(
-    () =>
-      new DefaultChatTransport<AppUIMessage>({ api: `/api/advisors/${advisor.id}/workshop-chat` }),
-    [advisor.id],
-  );
-  const { messages, sendMessage, status } = useChat<AppUIMessage>({
-    id: `${advisor.id}-skill-creator`,
-    transport,
-  });
-  const [contextSources, setContextSources] = React.useState<AdvisorSource[]>([]);
-  const [brief, setBrief] = React.useState("");
-  const [chatInput, setChatInput] = React.useState("");
-  const [draftTitle, setDraftTitle] = React.useState("");
-  const [draftSlug, setDraftSlug] = React.useState("");
-  const [draftContent, setDraftContent] = React.useState("");
-  const [isDragging, setIsDragging] = React.useState(false);
-  const [isImporting, setIsImporting] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const busy = status === "submitted" || status === "streaming";
+  if (error) {
+    return <EmptyPanel title="Graph status unavailable" body={error} />;
+  }
 
-  React.useEffect(() => {
-    if (!open) return;
-    setError(null);
-  }, [open]);
+  if (!status) {
+    return <EmptyPanel title="Loading graph status" body="Checking Graphify and fallback skill." />;
+  }
 
-  if (!open) return null;
-
-  const addContextSource = (source: AdvisorSource) => {
-    setContextSources((items) =>
-      items.some((item) => item.id === source.id) ? items : [...items, source],
-    );
-  };
-
-  const importDroppedFiles = async (files: File[]) => {
-    const imported: AdvisorSource[] = [];
-    for (const droppedFile of files) {
-      const formData = new FormData();
-      formData.set("title", titleFromFile(droppedFile));
-      if (isPdfFile(droppedFile)) {
-        formData.set("kind", "pdf");
-        formData.set("file", droppedFile);
-      } else if (isTextLikeFile(droppedFile)) {
-        const text = await droppedFile.text();
-        if (!text.trim()) throw new Error(`${droppedFile.name} is empty.`);
-        formData.set("kind", "text");
-        formData.set("body", text);
-      } else {
-        throw new Error(`${droppedFile.name} is not a supported source file.`);
-      }
-      const source = await importAdvisorSource(advisor.id, formData);
-      imported.push(source);
-      await onSourceImported(source);
-    }
-    return imported;
-  };
-
-  const importDroppedText = async (value: string) => {
-    const dropped = value.trim();
-    if (!dropped) return [];
-    const maybeUrl = parseDroppedUrl(firstUsefulDroppedLine(dropped));
-    const formData = new FormData();
-    if (maybeUrl) {
-      formData.set("kind", isYoutubeUrl(maybeUrl) ? "youtube" : "website");
-      formData.set("title", "");
-      formData.set("url", maybeUrl);
-    } else {
-      formData.set("kind", "text");
-      formData.set("title", "Skill creator context");
-      formData.set("body", dropped);
-    }
-    const source = await importAdvisorSource(advisor.id, formData);
-    await onSourceImported(source);
-    return [source];
-  };
-
-  const handleDrop = async (event: React.DragEvent<HTMLElement>) => {
-    event.preventDefault();
-    setIsDragging(false);
-    if (isImporting) return;
-    setIsImporting(true);
-    setError(null);
-    try {
-      const files = Array.from(event.dataTransfer.files);
-      const imported =
-        files.length > 0
-          ? await importDroppedFiles(files)
-          : await importDroppedText(
-              event.dataTransfer.getData("text/uri-list") ||
-                event.dataTransfer.getData("text/plain"),
-            );
-      if (imported.length === 0) throw new Error("Drop a PDF, text file, URL, or text.");
-      setContextSources((items) => {
-        const next = [...items];
-        for (const source of imported) {
-          if (!next.some((item) => item.id === source.id)) next.push(source);
-        }
-        return next;
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to import dropped context");
-    } finally {
-      setIsImporting(false);
-    }
-  };
-
-  const handlePickedFiles = async (files: File[]) => {
-    if (files.length === 0 || isImporting) return;
-    setIsImporting(true);
-    setError(null);
-    try {
-      const imported = await importDroppedFiles(files);
-      setContextSources((items) => {
-        const next = [...items];
-        for (const source of imported) {
-          if (!next.some((item) => item.id === source.id)) next.push(source);
-        }
-        return next;
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to import selected files");
-    } finally {
-      setIsImporting(false);
-    }
-  };
-
-  const submit = () => {
-    const request = chatInput.trim() || "Draft one advisor skill from the attached context.";
-    const context = contextSources
-      .map(
-        (source) =>
-          `## ${source.title}\nType: ${source.kind ?? "text"}\nStatus: ${source.status ?? "ready"}\n${source.body.slice(0, 4000)}`,
-      )
-      .join("\n\n");
-    setChatInput("");
-    void sendMessage({
-      text: [
-        "Act as a concise skill-creator for a Sprint Buddy advisor brain.",
-        `Advisor: ${advisor.name}`,
-        brief.trim() ? `Skill brief: ${brief.trim()}` : undefined,
-        context ? `Context sources:\n${context}` : "No context sources attached.",
-        "Return one copy-ready advisor skill markdown page with: Trigger, Procedure, Response Shape.",
-        `User request: ${request}`,
-      ]
-        .filter(Boolean)
-        .join("\n\n"),
-    });
-  };
-
-  const makeDraft = () => {
-    const title =
-      draftTitle.trim() ||
-      brief.trim().split(/\r?\n/)[0]?.slice(0, 80) ||
-      contextSources[0]?.title ||
-      "New Advisor Skill";
-    const slug = uniquePageSlug(draftSlug || slugify(title), existingSkills);
-    setDraftTitle(title);
-    setDraftSlug(slug);
-    setDraftContent(advisorSkillMarkdown(title, brief, contextSources));
-  };
-
-  const insertSkill = () => {
-    const title = draftTitle.trim() || "New Advisor Skill";
-    const slug = uniquePageSlug(draftSlug || slugify(title), existingSkills);
-    onInsertSkill({
-      slug,
-      title,
-      content: draftContent.trim() || advisorSkillMarkdown(title, brief, contextSources),
-      updatedAt: Date.now(),
-    });
-    onClose();
-  };
+  const { graphify, fallbackSkill } = status;
+  const graphifyUsable =
+    graphify.enabled && graphify.hasGraphifyOut && (graphify.hasHtml || graphify.hasGraphJson);
+  const htmlSrc = graphify.htmlFile
+    ? `/api/graphify/artifact?file=${encodeURIComponent(graphify.htmlFile)}`
+    : "";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4">
-      <section className="bg-background border-border flex max-h-[90dvh] w-full max-w-[1120px] flex-col overflow-hidden rounded-lg border shadow-xl">
-        <div className="border-border flex items-center justify-between gap-3 border-b px-4 py-3">
-          <div>
-            <h2 className="text-base font-semibold">Skill creator</h2>
-            <p className="text-muted-foreground text-xs">{advisor.name}</p>
-          </div>
-          <Button type="button" variant="ghost" size="icon" onClick={onClose}>
-            <X className="size-4" />
-          </Button>
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <div className="grid gap-3 lg:grid-cols-3">
+        <div className="border-border bg-background rounded-md border p-3">
+          <p className="text-muted-foreground font-mono text-[10px] uppercase tracking-wider">
+            Graphify
+          </p>
+          <h3 className="mt-1 text-sm font-semibold">
+            {graphifyUsable
+              ? "Enabled with artifacts"
+              : graphify.enabled
+                ? "Enabled, artifacts missing"
+                : "Disabled by USE_GRAPHIFY=false"}
+          </h3>
+          <p className="text-muted-foreground mt-1 text-xs">
+            {graphifyUsable
+              ? "graphify-out exists and will be preferred for graph UX."
+              : graphify.hasGraphifyOut
+                ? "graphify-out exists, but HTML/JSON graph artifacts are missing."
+                : "No graphify-out directory found; fallback context is used when needed."}
+          </p>
         </div>
+        <div className="border-border bg-background rounded-md border p-3">
+          <p className="text-muted-foreground font-mono text-[10px] uppercase tracking-wider">
+            Artifacts
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            <span className="border-border rounded-md border px-2 py-1">
+              HTML: {graphify.hasHtml ? graphify.htmlFile : "missing"}
+            </span>
+            <span className="border-border rounded-md border px-2 py-1">
+              JSON: {graphify.hasGraphJson ? "present" : "missing"}
+            </span>
+            <span className="border-border rounded-md border px-2 py-1">
+              Report: {graphify.hasReport ? "present" : "missing"}
+            </span>
+          </div>
+        </div>
+        <div className="border-border bg-background rounded-md border p-3">
+          <p className="text-muted-foreground font-mono text-[10px] uppercase tracking-wider">
+            Fallback skill
+          </p>
+          <h3 className="mt-1 truncate text-sm font-semibold">
+            {fallbackSkill?.name ?? "Missing"}
+          </h3>
+          <p className="text-muted-foreground mt-1 text-xs">
+            {fallbackSkill?.relativePath ?? ".skills/graph_fallback/SKILL.md"}
+          </p>
+        </div>
+      </div>
 
-        <div className="grid min-h-0 flex-1 gap-0 overflow-auto lg:grid-cols-[340px_minmax(0,1fr)]">
-          <aside className="border-border bg-muted/20 min-h-0 border-b p-4 lg:border-r lg:border-b-0">
-            <label
-              onDragEnter={(event) => {
-                event.preventDefault();
-                setIsDragging(true);
-              }}
-              onDragOver={(event) => {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "copy";
-                setIsDragging(true);
-              }}
-              onDragLeave={(event) => {
-                const nextTarget = event.relatedTarget;
-                if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
-                setIsDragging(false);
-              }}
-              onDrop={(event) => void handleDrop(event)}
-              className={cn(
-                "border-border bg-background hover:bg-muted focus-within:ring-ring/50 flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed p-4 text-center transition-colors focus-within:ring-2",
-                isDragging && "border-brand bg-brand-muted text-brand",
-              )}
-            >
-              <input
-                type="file"
-                multiple
-                accept="application/pdf,.pdf,.txt,.md,.markdown,.csv,.json,text/*"
-                className="hidden"
-                onChange={(event) => {
-                  const pickedFiles = Array.from(event.currentTarget.files ?? []);
-                  event.currentTarget.value = "";
-                  void handlePickedFiles(pickedFiles);
-                }}
-              />
-              <Upload className="mb-2 size-5" />
-              <p className="text-sm font-medium">{isImporting ? "Importing..." : "Drop context"}</p>
-              <p className="text-muted-foreground mt-1 text-xs">PDF, text, markdown, URL</p>
-            </label>
-
-            {error && (
-              <div className="text-destructive mt-3 flex items-start gap-2 text-xs leading-5">
-                <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <div className="mt-4 space-y-2">
-              <h3 className="text-xs font-medium tracking-wider uppercase">Context</h3>
-              <div className="space-y-2">
-                {contextSources.map((source) => (
-                  <div
-                    key={source.id}
-                    className="border-border bg-background rounded-md border p-2"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{source.title}</p>
-                        <p className="text-muted-foreground text-xs">
-                          {source.kind ?? "text"}
-                          {source.status === "needs_review" ? " · needs review" : ""}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() =>
-                          setContextSources((items) =>
-                            items.filter((item) => item.id !== source.id),
-                          )
-                        }
-                      >
-                        <X className="size-3" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-                {contextSources.length === 0 && (
-                  <p className="text-muted-foreground text-sm">No context attached.</p>
-                )}
-              </div>
-            </div>
-
-            {sources.length > 0 && (
-              <div className="mt-4 space-y-2">
-                <h3 className="text-xs font-medium tracking-wider uppercase">Existing sources</h3>
-                <div className="flex flex-wrap gap-1.5">
-                  {sources.slice(0, 8).map((source) => (
-                    <button
-                      key={source.id}
-                      type="button"
-                      onClick={() => addContextSource(source)}
-                      className="border-border bg-background hover:bg-muted rounded-md border px-2 py-1 text-xs"
-                    >
-                      {source.title}
-                    </button>
-                  ))}
+      {graphifyUsable && graphify.hasHtml && htmlSrc ? (
+        <iframe
+          title="Graphify graph"
+          src={htmlSrc}
+          className="border-border min-h-[520px] flex-1 rounded-md border bg-background"
+        />
+      ) : (
+        <div className="border-border bg-muted/20 flex min-h-[360px] flex-1 flex-col rounded-md border p-4">
+          <h3 className="text-sm font-semibold">Fallback graph context</h3>
+          <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
+            Founder&apos;s Chat will audit the fallback skill before answering while Graphify is
+            disabled or unavailable. The skill stays concise and routes to modular markdown
+            references.
+          </p>
+          <div className="mt-4 grid gap-2">
+            {(fallbackSkill?.references ?? []).map((reference) => (
+              <div
+                key={reference.relativePath}
+                className="border-border bg-background rounded-md border px-3 py-2 text-sm"
+              >
+                <div className="font-medium">{reference.title}</div>
+                <div className="text-muted-foreground mt-0.5 font-mono text-xs">
+                  {reference.relativePath}
                 </div>
               </div>
+            ))}
+            {!fallbackSkill && (
+              <div className="border-border text-muted-foreground rounded-md border border-dashed p-3 text-sm">
+                Create .skills/graph_fallback/SKILL.md to enable fallback audits.
+              </div>
             )}
-          </aside>
-
-          <div className="grid min-h-0 gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-            <div className="flex min-h-[520px] flex-col">
-              <Textarea
-                value={brief}
-                onChange={(event) => setBrief(event.target.value)}
-                placeholder="Skill goal, trigger, or founder situation"
-                className="mb-3 min-h-20"
-              />
-              <div className="border-border bg-card min-h-0 flex-1 overflow-auto rounded-md border p-3">
-                {messages.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">
-                    Ask for a focused advisor skill draft from the attached context.
-                  </p>
-                ) : (
-                  <MessageList messages={messages} advisor={null} />
-                )}
-              </div>
-              <form
-                className="mt-3 flex gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  submit();
-                }}
-              >
-                <Input
-                  value={chatInput}
-                  onChange={(event) => setChatInput(event.target.value)}
-                  placeholder="Ask the skill creator"
-                />
-                <Button type="submit" disabled={busy || (!chatInput.trim() && !brief.trim())}>
-                  <Send className="size-4" />
-                </Button>
-              </form>
-            </div>
-
-            <div className="border-border bg-card rounded-md border p-3">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold">Draft skill</h3>
-                <Button type="button" variant="outline" size="sm" onClick={makeDraft}>
-                  <Sparkles className="size-4" />
-                  Draft
-                </Button>
-              </div>
-              <div className="space-y-2">
-                <Input
-                  value={draftSlug}
-                  onChange={(event) => setDraftSlug(event.target.value)}
-                  placeholder="skill-slug"
-                />
-                <Input
-                  value={draftTitle}
-                  onChange={(event) => setDraftTitle(event.target.value)}
-                  placeholder="Skill title"
-                />
-                <Textarea
-                  value={draftContent}
-                  onChange={(event) => setDraftContent(event.target.value)}
-                  placeholder="# Skill title"
-                  className="min-h-[330px] font-mono text-sm"
-                />
-              </div>
-              <div className="mt-3 flex justify-end gap-2">
-                <Button type="button" variant="ghost" onClick={onClose}>
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  onClick={insertSkill}
-                  disabled={!draftTitle.trim() && !draftContent.trim()}
-                >
-                  <Plus className="size-4" />
-                  Insert skill
-                </Button>
-              </div>
-            </div>
           </div>
         </div>
-      </section>
+      )}
     </div>
   );
 }
@@ -2685,88 +2562,9 @@ function uniquePageSlug(base: string, pages: BrainPage[]) {
 
 function EditorCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="border-border bg-card rounded-lg border p-3">
-      <h3 className="mb-2 text-sm font-semibold">{title}</h3>
+    <section className="border-border bg-card flex min-h-0 flex-col rounded-lg border p-3">
+      <h3 className="mb-2 shrink-0 text-sm font-semibold">{title}</h3>
       {children}
-    </section>
-  );
-}
-
-function PageCollectionEditor({
-  title,
-  pages,
-  onChange,
-  addLabel = "Add page",
-  addIcon: AddIcon = Plus,
-  onAdd,
-}: {
-  title: string;
-  pages: BrainPage[];
-  onChange: (pages: BrainPage[]) => void;
-  addLabel?: string;
-  addIcon?: React.ComponentType<{ className?: string }>;
-  onAdd?: () => void;
-}) {
-  const update = (index: number, patch: Partial<BrainPage>) => {
-    onChange(pages.map((page, i) => (i === index ? { ...page, ...patch } : page)));
-  };
-
-  const addPage = () => {
-    if (onAdd) {
-      onAdd();
-      return;
-    }
-    onChange([
-      ...pages,
-      {
-        slug: `new-${pages.length + 1}`,
-        title: "New page",
-        content: "# New page\n\n",
-        updatedAt: Date.now(),
-      },
-    ]);
-  };
-
-  return (
-    <section className="border-border bg-card rounded-lg border p-3">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold">{title}</h3>
-        <Button size="sm" variant="outline" onClick={addPage}>
-          <AddIcon className="size-4" />
-          {addLabel}
-        </Button>
-      </div>
-      <div className="grid gap-3">
-        {pages.map((page, index) => (
-          <div
-            key={`${page.slug}-${page.updatedAt}`}
-            className="border-border rounded-md border p-3"
-          >
-            <div className="mb-2 grid gap-2 md:grid-cols-[180px_minmax(0,1fr)_auto]">
-              <Input
-                value={page.slug}
-                onChange={(event) => update(index, { slug: event.target.value })}
-              />
-              <Input
-                value={page.title}
-                onChange={(event) => update(index, { title: event.target.value })}
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onChange(pages.filter((_, i) => i !== index))}
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
-            <Textarea
-              value={page.content}
-              onChange={(event) => update(index, { content: event.target.value })}
-              className="min-h-36 font-mono text-sm"
-            />
-          </div>
-        ))}
-      </div>
     </section>
   );
 }
@@ -2803,9 +2601,10 @@ function SourcesEditor({
   const canImport =
     kind === "text"
       ? body.trim().length > 0
-      : kind === "pdf"
+      : kind === "pdf" || kind === "docx"
         ? Boolean(file)
         : url.trim().length > 0;
+  const isEditingSource = Boolean(selectedSource);
 
   const postSourceImport = async (formData: FormData) => {
     return importAdvisorSource(advisorId, formData);
@@ -2829,7 +2628,7 @@ function SourcesEditor({
       formData.set("title", title);
       if (kind === "text") formData.set("body", body);
       if (kind === "website" || kind === "youtube") formData.set("url", url);
-      if ((kind === "pdf" || (kind as string) === "docx") && file) formData.set("file", file);
+      if ((kind === "pdf" || kind === "docx") && file) formData.set("file", file);
 
       const source = await postSourceImport(formData);
       clearImportFields();
@@ -2967,16 +2766,23 @@ function SourcesEditor({
   };
 
   return (
-    <section className="border-border bg-card rounded-lg border p-3">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+    <section className="border-border bg-card flex min-h-0 flex-1 flex-col rounded-lg border p-3">
+      <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <BookOpen className="text-brand size-4" />
           <h3 className="text-sm font-semibold">Sources</h3>
         </div>
         <div className="text-muted-foreground text-xs">{sources.length} captured</div>
       </div>
-      <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
-        <div className="space-y-3">
+      <div
+        className={cn(
+          "grid min-h-0 flex-1 gap-4",
+          isEditingSource
+            ? "xl:grid-cols-[minmax(360px,0.45fr)_minmax(0,1fr)] 2xl:grid-cols-[minmax(420px,0.42fr)_minmax(0,1fr)]"
+            : "grid-cols-1",
+        )}
+      >
+        <div className={cn("min-h-0 space-y-3 overflow-auto", isEditingSource ? "pr-1" : "pr-0")}>
           <div className="border-border bg-background rounded-md border p-3">
             <div className="mb-3 grid grid-cols-2 gap-2">
               <label
@@ -3086,11 +2892,15 @@ function SourcesEditor({
                   type="url"
                 />
               )}
-              {kind === "pdf" && (
+              {(kind === "pdf" || kind === "docx") && (
                 <Input
-                  key={file?.name ?? "empty-pdf-input"}
+                  key={file?.name ?? `empty-${kind}-input`}
                   type="file"
-                  accept="application/pdf,.pdf"
+                  accept={
+                    kind === "pdf"
+                      ? "application/pdf,.pdf"
+                      : "application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
+                  }
                   onChange={(event) => setFile(event.target.files?.[0] ?? null)}
                 />
               )}
@@ -3151,7 +2961,7 @@ function SourcesEditor({
           </div>
         </div>
         {selectedSource ? (
-          <div className="space-y-2">
+          <div className="flex min-h-0 flex-col gap-2">
             <Input
               value={selectedSource.title}
               onChange={(event) =>
@@ -3192,7 +3002,7 @@ function SourcesEditor({
               onChange={(event) =>
                 onChangeSelected({ ...selectedSource, body: event.target.value })
               }
-              className="min-h-[360px] font-mono text-sm"
+              className="min-h-[360px] flex-1 font-mono text-sm"
             />
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={onSaveSelected}>
@@ -3207,9 +3017,7 @@ function SourcesEditor({
               </Button>
             </div>
           </div>
-        ) : (
-          <EmptyPanel title="No source selected" body="Add or select a source to edit it." />
-        )}
+        ) : null}
       </div>
     </section>
   );
@@ -3235,15 +3043,16 @@ function WorkshopChat({ advisor }: { advisor: Advisor }) {
   };
 
   return (
-    <section className="border-border bg-card rounded-lg border p-3">
+    <section className="border-border bg-card flex h-full min-h-0 flex-col rounded-lg border p-3">
       <div className="mb-3 flex items-center gap-2">
         <Sparkles className="text-brand size-4" />
-        <h3 className="text-sm font-semibold">Advisor Brain Workshop</h3>
+        <h3 className="text-sm font-semibold">Advisor Brain Manager</h3>
       </div>
-      <div className="border-border bg-background max-h-[420px] overflow-auto rounded-md border p-3">
+      <div className="border-border bg-background min-h-0 flex-1 overflow-auto rounded-md border p-3">
         {messages.length === 0 ? (
           <p className="text-muted-foreground text-sm">
-            Ask for source distillation, vision refinement, wiki page drafts, or advisor skills.
+            Ask for source distillation, vision refinement, wiki page drafts, or fallback
+            references.
           </p>
         ) : (
           <MessageList messages={messages} advisor={null} />
@@ -3259,7 +3068,7 @@ function WorkshopChat({ advisor }: { advisor: Advisor }) {
         <Input
           value={input}
           onChange={(event) => setInput(event.target.value)}
-          placeholder="Example: turn my sources into wiki pages and skills"
+          placeholder="Example: turn my sources into wiki pages and fallback references"
         />
         <Button type="submit" disabled={!input.trim() || busy}>
           <Send className="size-4" />

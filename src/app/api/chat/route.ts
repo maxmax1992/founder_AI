@@ -3,15 +3,11 @@ import { streamCodexAgent } from "@/lib/ai/agents";
 import { buddySystemPrompt, fallbackBuddyAnswer } from "@/lib/ai/prompts";
 import { hasModelCredentials, providerErrorMessage } from "@/lib/ai/provider";
 import { textStreamResponse } from "@/lib/ai/streams";
-import { advisorTools } from "@/lib/ai/tools";
+import { buddyContextTools } from "@/lib/ai/tools";
+import { buildBuddyAnswerContext } from "@/lib/buddy-context";
+import { graphFallbackDirectAnswer } from "@/lib/graph-fallback-skill";
 import { errorJson, zodError } from "@/lib/http";
-import {
-  getAdvisor,
-  getAdvisorBrain,
-  listSources,
-  saveConversationMessages,
-  updateMemoryFromMessages,
-} from "@/lib/store";
+import { saveConversationMessages, updateFounderMemoryFromMessages } from "@/lib/store";
 import { type AppUIMessage, ChatRequestBodySchema } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -42,35 +38,66 @@ export async function POST(req: Request) {
     return errorJson("bad_request", "Invalid UI messages", 400, validated.error.message);
   }
 
-  const advisor = await getAdvisor(parsed.data.advisorId);
-  const brain = await getAdvisorBrain(parsed.data.advisorId);
-  if (!advisor || !brain) return errorJson("not_found", "Advisor not found", 404);
-  const sources = await listSources(advisor.id);
+  const userText = lastUserText(validated.data);
+  const context = await buildBuddyAnswerContext(
+    parsed.data.advisorId,
+    parsed.data.founderId,
+    userText,
+  );
+  if (!context) return errorJson("not_found", "Advisor or founder not found", 404);
+
+  if (!context.graphifyEnabled) {
+    const directFallbackAnswer = graphFallbackDirectAnswer(userText, context.graphFallbackSkill);
+    if (directFallbackAnswer) {
+      return textStreamResponse<AppUIMessage>(
+        validated.data,
+        directFallbackAnswer,
+        async (messages) => {
+          await saveConversationMessages(
+            parsed.data.id,
+            context.advisor.id,
+            context.founder.id,
+            messages,
+          );
+        },
+      );
+    }
+  }
 
   if (!hasModelCredentials()) {
     return textStreamResponse<AppUIMessage>(
       validated.data,
-      fallbackBuddyAnswer(lastUserText(validated.data), advisor, brain),
+      fallbackBuddyAnswer(userText, context),
       async (messages) => {
-        await saveConversationMessages(parsed.data.id, advisor.id, messages);
-        await updateMemoryFromMessages(advisor.id, messages);
+        await saveConversationMessages(
+          parsed.data.id,
+          context.advisor.id,
+          context.founder.id,
+          messages,
+        );
+        await updateFounderMemoryFromMessages(context.founder.id, messages);
       },
     );
   }
 
   const result = await streamCodexAgent({
     id: "sprint-buddy-chat",
-    instructions: buddySystemPrompt(advisor, brain, sources),
+    instructions: buddySystemPrompt(context),
     messages: validated.data,
-    tools: advisorTools(advisor.id),
+    tools: buddyContextTools(context.advisor.id, context.founder.id),
     maxSteps: 3,
   });
 
   return result.toUIMessageStreamResponse({
     originalMessages: validated.data,
     onFinish: async ({ messages }) => {
-      await saveConversationMessages(parsed.data.id, advisor.id, messages as AppUIMessage[]);
-      await updateMemoryFromMessages(advisor.id, messages as AppUIMessage[]);
+      await saveConversationMessages(
+        parsed.data.id,
+        context.advisor.id,
+        context.founder.id,
+        messages as AppUIMessage[],
+      );
+      await updateFounderMemoryFromMessages(context.founder.id, messages as AppUIMessage[]);
     },
     onError: providerErrorMessage,
   });

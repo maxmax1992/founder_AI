@@ -1,4 +1,5 @@
 import { errorJson } from "@/lib/http";
+import { compileLlmWikiFromSources } from "@/lib/llm-wiki-workshop";
 import {
   buildTextSource,
   importDocxSource,
@@ -43,6 +44,7 @@ export async function POST(req: Request, { params }: Params) {
     }
 
     const source = await createSource(id, imported);
+    await compileLlmWikiFromSources(id);
     return Response.json({ source }, { status: 201 });
   } catch (err) {
     return errorJson(

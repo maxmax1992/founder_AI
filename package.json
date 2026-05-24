@@ -7,6 +7,7 @@
     "dev": "bun --bun next dev",
     "build": "bun --bun next build",
     "start": "bun --bun next start",
+    "e2e:llm-wiki": "bun run tools/e2e-llm-wiki.ts",
     "lint": "biome check .",
     "format": "biome check --write .",
     "format:check": "biome check ."

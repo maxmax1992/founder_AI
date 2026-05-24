@@ -4,6 +4,7 @@ import { fallbackWorkshopAnswer, workshopSystemPrompt } from "@/lib/ai/prompts";
 import { hasModelCredentials, providerErrorMessage } from "@/lib/ai/provider";
 import { textStreamResponse } from "@/lib/ai/streams";
 import { errorJson, zodError } from "@/lib/http";
+import { applyWorkshopCommand } from "@/lib/llm-wiki-workshop";
 import { getAdvisor, getAdvisorBrain, listSources } from "@/lib/store";
 import { type AppUIMessage, WorkshopChatRequestBodySchema } from "@/lib/types";
 
@@ -33,6 +34,12 @@ export async function POST(req: Request, { params }: Params) {
   const advisor = await getAdvisor(id);
   const brain = await getAdvisorBrain(id);
   if (!advisor || !brain) return errorJson("not_found", "Advisor not found", 404);
+
+  const workshopAction = await applyWorkshopCommand(id, latestUserText(validated.data));
+  if (workshopAction) {
+    return textStreamResponse<AppUIMessage>(validated.data, workshopAction.message);
+  }
+
   const sources = await listSources(id);
 
   if (!hasModelCredentials()) {
@@ -50,4 +57,14 @@ export async function POST(req: Request, { params }: Params) {
     originalMessages: validated.data,
     onError: providerErrorMessage,
   });
+}
+
+function latestUserText(messages: AppUIMessage[]) {
+  const latest = [...messages].reverse().find((message) => message.role === "user");
+  if (!latest) return "";
+  return latest.parts
+    .filter((part) => part.type === "text")
+    .map((part) => part.text)
+    .join(" ")
+    .trim();
 }

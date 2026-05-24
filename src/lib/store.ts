@@ -3,6 +3,9 @@ import path from "node:path";
 import { generateId } from "ai";
 import type { AppSettings } from "@/lib/ai/model-settings";
 import { DEFAULT_APP_SETTINGS, normalizeAppSettings } from "@/lib/ai/model-settings";
+import { loadGraphFallbackSkill } from "@/lib/graph-fallback-skill";
+import { readGraphifyRetrievalDocuments, shouldUseGraphFallback } from "@/lib/graphify-config";
+import { graphifyRetrieve, type RetrievalDocument } from "@/lib/graphify-retrieval";
 import { slugify } from "./slug";
 import type {
   Advisor,
@@ -13,6 +16,8 @@ import type {
   CheckinItem,
   CheckinStatus,
   Conversation,
+  Founder,
+  FounderBrain,
   SearchHit,
   StoredMessage,
 } from "./types";
@@ -20,11 +25,13 @@ import type {
 const ROOT = process.cwd();
 const DATA_DIR = path.join(ROOT, "data");
 const ADVISORS_DIR = path.join(DATA_DIR, "advisors");
+const FOUNDERS_DIR = path.join(DATA_DIR, "founders");
 const INDEX_PATH = path.join(DATA_DIR, "index.json");
 
 interface StoreIndex {
   version: 1;
   advisors: Advisor[];
+  founders: Founder[];
   conversations: Conversation[];
   messages: StoredMessage[];
   checkins: CheckinItem[];
@@ -32,9 +39,19 @@ interface StoreIndex {
 }
 
 const DEFAULT_ADVISOR_ID = "marten-mickos";
+const DEFAULT_FOUNDER_ID = "local-founder";
 
 function now() {
   return Date.now();
+}
+
+function defaultFounder(timestamp = now()): Founder {
+  return {
+    id: DEFAULT_FOUNDER_ID,
+    name: "Local Founder",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
 }
 
 function defaultIndex(): StoreIndex {
@@ -45,11 +62,12 @@ function defaultIndex(): StoreIndex {
       {
         id: DEFAULT_ADVISOR_ID,
         name: "Marten Mickos",
-        description: "Aalto Founder School advisor voice for Sprint Buddy.",
+        description: "Aalto Founder School advisor voice for Founder's harness.",
         createdAt: timestamp,
         updatedAt: timestamp,
       },
     ],
+    founders: [defaultFounder(timestamp)],
     conversations: [],
     messages: [],
     checkins: [],
@@ -86,32 +104,42 @@ This file defines how ${advisorName}'s LLM Wiki is maintained.
 `;
 }
 
+function defaultFounderBrain(founderName = "Local Founder"): FounderBrain {
+  return {
+    profile: `# ${founderName}\n\nPrivate founder profile. Add only founder-owned context here; do not mix this into any advisor brain.`,
+    memory:
+      "# Founder Memory\n\nConcise pattern memory from Founder's Chat will appear here. Keep it short, private, and action-oriented.",
+    graph: defaultFounderGraph(
+      { id: DEFAULT_FOUNDER_ID, name: founderName, createdAt: now(), updatedAt: now() },
+      {
+        profile: `# ${founderName}\n\nPrivate founder profile. Add only founder-owned context here; do not mix this into any advisor brain.`,
+        memory:
+          "# Founder Memory\n\nConcise pattern memory from Founder's Chat will appear here. Keep it short, private, and action-oriented.",
+        graph: "",
+      },
+      [],
+      [],
+    ),
+  };
+}
+
 function defaultBrain(advisorName = "Marten Mickos"): AdvisorBrain {
   return {
-    profile: `# ${advisorName}\n\nAdvisor profile for Sprint Buddy. Add real source material in the Advisor Editor before relying on advisor-specific claims.`,
+    profile: `# ${advisorName}\n\nAdvisor profile for Founder's harness. Add real source material in the Advisor Editor before relying on advisor-specific claims.`,
     vision:
       "# Vision\n\nHelp founders become more honest, decisive, and self-aware during the 15-week Founder Sprint. Optimize for useful reflection, direct conversations, and concrete next actions.",
     direction:
       "# Direction\n\n- Be concise and direct.\n- Name the real issue before giving advice.\n- Ask one uncomfortable but useful question.\n- End with one next action the founder can take within 24 hours.\n- Do not fabricate advisor-specific frameworks when the wiki is empty.",
     memory:
-      "# Founder Memory\n\nConcise pattern memory from Buddy Chat will appear here. Keep it short, private, and action-oriented.",
+      "# Advisor Memory\n\nStable advisor-side notes can appear here. Founder-specific conversation history belongs in the founder graph, not this advisor brain.",
     schema: defaultWikiSchema(advisorName),
     wikiPages: [
       {
-        slug: "sprint-buddy-challenge",
-        title: "Sprint Buddy Challenge",
+        slug: "founders-harness-challenge",
+        title: "Founder's harness challenge",
         updatedAt: now(),
         content:
-          "# Sprint Buddy Challenge\n\nSprint Buddy is an AI companion for Founder Sprint participants. It should feel like a private coach in the founder pocket, not a survey tool or organizer monitor.",
-      },
-    ],
-    skills: [
-      {
-        slug: "hard-question-then-next-action",
-        title: "Hard Question, Then Next Action",
-        updatedAt: now(),
-        content:
-          "# Hard Question, Then Next Action\n\nWhen a founder brings a vague concern, ask one precise question that reveals the avoided truth, then propose one concrete action for the next 24 hours.",
+          "# Founder's harness challenge\n\nFounder's harness is an AI companion for Founder Sprint participants. It should feel like a private coach in the founder pocket, not a survey tool or organizer monitor.",
       },
     ],
   };
@@ -128,22 +156,34 @@ async function exists(filePath: string): Promise<boolean> {
 
 async function ensureDataDir() {
   await fs.mkdir(ADVISORS_DIR, { recursive: true });
+  await fs.mkdir(FOUNDERS_DIR, { recursive: true });
   if (!(await exists(INDEX_PATH))) {
     const index = defaultIndex();
     await saveIndex(index);
     await ensureAdvisorFiles(index.advisors[0], defaultBrain(index.advisors[0].name));
+    await ensureFounderFiles(index.founders[0], defaultFounderBrain(index.founders[0].name));
   }
 }
 
 async function loadIndex(): Promise<StoreIndex> {
   await ensureDataDir();
   const raw = await fs.readFile(INDEX_PATH, "utf8");
-  const parsed = JSON.parse(raw) as StoreIndex & { settings?: unknown };
+  const parsed = JSON.parse(raw) as Partial<StoreIndex> & { settings?: unknown };
+  const fallback = defaultIndex();
   const index: StoreIndex = {
-    ...parsed,
+    version: 1,
+    advisors: Array.isArray(parsed.advisors) ? parsed.advisors : fallback.advisors,
+    founders:
+      Array.isArray(parsed.founders) && parsed.founders.length > 0
+        ? parsed.founders
+        : fallback.founders,
+    conversations: Array.isArray(parsed.conversations) ? parsed.conversations : [],
+    messages: Array.isArray(parsed.messages) ? parsed.messages : [],
+    checkins: Array.isArray(parsed.checkins) ? parsed.checkins : [],
     settings: normalizeAppSettings(parsed.settings),
   };
-  if (!parsed.settings) await saveIndex(index);
+  const shouldSave = !parsed.settings || !Array.isArray(parsed.founders);
+  if (shouldSave) await saveIndex(index);
   return index;
 }
 
@@ -154,6 +194,10 @@ async function saveIndex(index: StoreIndex) {
 
 function advisorDir(advisorId: string) {
   return path.join(ADVISORS_DIR, advisorId);
+}
+
+function founderDir(founderId: string) {
+  return path.join(FOUNDERS_DIR, founderId);
 }
 
 function sourcesMetaPath(advisorId: string) {
@@ -209,11 +253,81 @@ async function writePageDir(dir: string, pages: BrainPage[]) {
   }
 }
 
+function firstParagraph(value: string, maxLength = 180) {
+  return (
+    value
+      .replace(/^# .+$/gm, "")
+      .split(/\n{2,}/)
+      .map((part) => part.replace(/\s+/g, " ").trim())
+      .find(Boolean)
+      ?.slice(0, maxLength) ?? ""
+  );
+}
+
+function bulletRows(rows: string[]) {
+  return rows.length > 0 ? rows.map((row) => `- ${row}`).join("\n") : "- None yet.";
+}
+
+function defaultFounderGraph(
+  founder: Founder,
+  brain: FounderBrain,
+  conversations: Conversation[],
+  messages: StoredMessage[],
+) {
+  const recentUserMessages = messages
+    .filter((message) => message.role === "user")
+    .slice(-8)
+    .map((message) => textFromStoredMessage(message))
+    .filter(Boolean);
+
+  return [
+    "# Founder Graph",
+    "",
+    `Founder: ${founder.name}`,
+    `Refreshed: ${new Date().toISOString()}`,
+    "",
+    "## Purpose",
+    "",
+    "This graph maps the named founder's private context: profile, conversation history, recurring patterns, decisions, unresolved tensions, and recent asks. It is queryable by Founder's Chat but disconnected from advisor essence.",
+    "",
+    "## Core Nodes",
+    "",
+    "- founder-profile -> describes -> current founder context",
+    "- founder-memory -> summarizes -> durable founder patterns",
+    "- conversations -> provide -> recent founder history",
+    "- unresolved-tensions -> inform -> hard questions and next actions",
+    "",
+    "## Profile Signal",
+    "",
+    firstParagraph(brain.profile) || "No founder profile details yet.",
+    "",
+    "## Memory Nodes",
+    "",
+    bulletRows(
+      brain.memory
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("- ")),
+    ),
+    "",
+    "## Recent Conversation Nodes",
+    "",
+    bulletRows(
+      conversations
+        .slice(-8)
+        .map((conversation) => `conversation:${conversation.id} -> ${conversation.title}`),
+    ),
+    "",
+    "## Recent Ask Nodes",
+    "",
+    bulletRows(recentUserMessages.map((message) => `founder-ask -> ${message.slice(0, 180)}`)),
+  ].join("\n");
+}
+
 async function ensureAdvisorFiles(advisor: Advisor, brain = defaultBrain(advisor.name)) {
   const dir = advisorDir(advisor.id);
   await fs.mkdir(path.join(dir, "sources"), { recursive: true });
   await fs.mkdir(path.join(dir, "wiki"), { recursive: true });
-  await fs.mkdir(path.join(dir, "skills"), { recursive: true });
   if (!(await exists(path.join(dir, "profile.md"))))
     await writeText(path.join(dir, "profile.md"), brain.profile);
   if (!(await exists(path.join(dir, "vision.md"))))
@@ -227,12 +341,20 @@ async function ensureAdvisorFiles(advisor: Advisor, brain = defaultBrain(advisor
   if ((await readPageDir(path.join(dir, "wiki"))).length === 0) {
     await writePageDir(path.join(dir, "wiki"), brain.wikiPages);
   }
-  if ((await readPageDir(path.join(dir, "skills"))).length === 0) {
-    await writePageDir(path.join(dir, "skills"), brain.skills);
-  }
   if (!(await exists(sourcesMetaPath(advisor.id)))) {
     await writeText(sourcesMetaPath(advisor.id), "[]\n");
   }
+}
+
+async function ensureFounderFiles(founder: Founder, brain = defaultFounderBrain(founder.name)) {
+  const dir = founderDir(founder.id);
+  await fs.mkdir(dir, { recursive: true });
+  if (!(await exists(path.join(dir, "profile.md"))))
+    await writeText(path.join(dir, "profile.md"), brain.profile);
+  if (!(await exists(path.join(dir, "memory.md"))))
+    await writeText(path.join(dir, "memory.md"), brain.memory);
+  if (!(await exists(path.join(dir, "graph.md"))))
+    await writeText(path.join(dir, "graph.md"), brain.graph);
 }
 
 async function writeAdvisorBrain(advisorId: string, brain: AdvisorBrain) {
@@ -243,7 +365,13 @@ async function writeAdvisorBrain(advisorId: string, brain: AdvisorBrain) {
   await writeText(path.join(dir, "memory.md"), brain.memory);
   await writeText(path.join(dir, "schema.md"), brain.schema || defaultWikiSchema());
   await writePageDir(path.join(dir, "wiki"), brain.wikiPages);
-  await writePageDir(path.join(dir, "skills"), brain.skills);
+}
+
+async function writeFounderBrain(founderId: string, brain: FounderBrain) {
+  const dir = founderDir(founderId);
+  await writeText(path.join(dir, "profile.md"), brain.profile);
+  await writeText(path.join(dir, "memory.md"), brain.memory);
+  await writeText(path.join(dir, "graph.md"), brain.graph);
 }
 
 export async function listAdvisors(): Promise<Advisor[]> {
@@ -296,6 +424,44 @@ export async function updateAdvisor(
   return advisor;
 }
 
+export async function getDefaultFounder(): Promise<Founder> {
+  const index = await loadIndex();
+  const founder = index.founders[0] ?? defaultFounder();
+  if (!index.founders.some((item) => item.id === founder.id)) {
+    index.founders.push(founder);
+    await saveIndex(index);
+  }
+  await ensureFounderFiles(founder);
+  return founder;
+}
+
+export async function getFounder(id?: string): Promise<Founder | null> {
+  const index = await loadIndex();
+  const founderId = id || index.founders[0]?.id || DEFAULT_FOUNDER_ID;
+  let founder = index.founders.find((item) => item.id === founderId) ?? null;
+  if (!founder && founderId === DEFAULT_FOUNDER_ID) {
+    founder = defaultFounder();
+    index.founders.push(founder);
+    await saveIndex(index);
+  }
+  if (founder) await ensureFounderFiles(founder);
+  return founder;
+}
+
+export async function updateFounder(
+  id: string,
+  patch: Partial<Pick<Founder, "name">>,
+): Promise<Founder | null> {
+  const index = await loadIndex();
+  const founder = index.founders.find((item) => item.id === id);
+  if (!founder) return null;
+  if (patch.name !== undefined) founder.name = patch.name;
+  founder.updatedAt = now();
+  await saveIndex(index);
+  await ensureFounderFiles(founder);
+  return founder;
+}
+
 export async function getAppSettings(): Promise<AppSettings> {
   const index = await loadIndex();
   return index.settings;
@@ -334,7 +500,6 @@ export async function getAdvisorBrain(advisorId: string): Promise<AdvisorBrain |
     memory: await readText(path.join(dir, "memory.md")),
     schema: await readText(path.join(dir, "schema.md"), defaultWikiSchema(advisor.name)),
     wikiPages: await readPageDir(path.join(dir, "wiki")),
-    skills: await readPageDir(path.join(dir, "skills")),
   };
 }
 
@@ -345,6 +510,27 @@ export async function updateAdvisorBrain(advisorId: string, brain: AdvisorBrain)
   await writeAdvisorBrain(advisorId, brain);
   await updateAdvisor(advisorId, {});
   return getAdvisorBrain(advisorId);
+}
+
+export async function getFounderBrain(founderId?: string): Promise<FounderBrain | null> {
+  const founder = await getFounder(founderId);
+  if (!founder) return null;
+  await ensureFounderFiles(founder);
+  const dir = founderDir(founder.id);
+  return {
+    profile: await readText(path.join(dir, "profile.md")),
+    memory: await readText(path.join(dir, "memory.md")),
+    graph: await readText(path.join(dir, "graph.md")),
+  };
+}
+
+export async function updateFounderBrain(founderId: string, brain: FounderBrain) {
+  const founder = await getFounder(founderId);
+  if (!founder) return null;
+  await ensureFounderFiles(founder, brain);
+  await writeFounderBrain(founderId, brain);
+  await updateFounder(founderId, {});
+  return getFounderBrain(founderId);
 }
 
 async function loadSourcesMeta(advisorId: string): Promise<Omit<AdvisorSource, "body">[]> {
@@ -448,7 +634,41 @@ export async function deleteSource(advisorId: string, sourceId: string) {
   return next.length !== before;
 }
 
+export async function refreshAdvisorGraph(advisorId: string) {
+  const brain = await getAdvisorBrain(advisorId);
+  if (!brain) return null;
+  return brain;
+}
+
+export async function refreshFounderGraph(founderId?: string) {
+  const founder = await getFounder(founderId);
+  if (!founder) return null;
+  const brain = await getFounderBrain(founder.id);
+  if (!brain) return null;
+  const index = await loadIndex();
+  const conversations = index.conversations.filter(
+    (conversation) => (conversation.founderId ?? DEFAULT_FOUNDER_ID) === founder.id,
+  );
+  const conversationIds = new Set(conversations.map((conversation) => conversation.id));
+  const messages = index.messages
+    .filter((message) => conversationIds.has(message.conversationId))
+    .sort((a, b) => a.createdAt - b.createdAt);
+
+  return updateFounderBrain(founder.id, {
+    ...brain,
+    graph: defaultFounderGraph(founder, brain, conversations, messages),
+  });
+}
+
 function textFromMessage(message: AppUIMessage) {
+  return message.parts
+    .filter((part) => part.type === "text")
+    .map((part) => part.text)
+    .join(" ")
+    .trim();
+}
+
+function textFromStoredMessage(message: StoredMessage) {
   return message.parts
     .filter((part) => part.type === "text")
     .map((part) => part.text)
@@ -496,6 +716,7 @@ export async function getConversation(conversationId: string, advisorId?: string
 export async function saveConversationMessages(
   conversationId: string,
   advisorId: string,
+  founderId: string,
   messages: AppUIMessage[],
 ) {
   const index = await loadIndex();
@@ -507,11 +728,13 @@ export async function saveConversationMessages(
   const existing = index.conversations.find((conversation) => conversation.id === conversationId);
   if (existing) {
     existing.title = existing.title || title;
+    existing.founderId = founderId;
     existing.updatedAt = timestamp;
   } else {
     index.conversations.push({
       id: conversationId,
       advisorId,
+      founderId,
       title,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -535,12 +758,12 @@ export async function saveConversationMessages(
   await saveIndex(index);
 }
 
-export async function updateMemoryFromMessages(advisorId: string, messages: AppUIMessage[]) {
+export async function updateFounderMemoryFromMessages(founderId: string, messages: AppUIMessage[]) {
   const lastUser = [...messages].reverse().find((message) => message.role === "user");
   if (!lastUser) return;
   const text = textFromMessage(lastUser);
   if (!text) return;
-  const brain = await getAdvisorBrain(advisorId);
+  const brain = await getFounderBrain(founderId);
   if (!brain) return;
   const lines = brain.memory
     .split("\n")
@@ -551,55 +774,85 @@ export async function updateMemoryFromMessages(advisorId: string, messages: AppU
     .split("\n")
     .filter((line) => line.startsWith("- [20"))
     .slice(-11);
-  const entry = `- [${new Date().toISOString().slice(0, 10)}] Founder asked: ${text.slice(0, 180)}`;
+  const entry = `- [${new Date().toISOString().slice(0, 10)}] Founder said: ${text.slice(0, 180)}`;
   brain.memory = `${lines || "# Founder Memory"}\n\n${[...previous, entry].join("\n")}\n`;
-  await updateAdvisorBrain(advisorId, brain);
-}
-
-function scoreDocument(queryTokens: string[], text: string) {
-  const lower = text.toLowerCase();
-  return queryTokens.reduce((score, token) => score + (lower.includes(token) ? 1 : 0), 0);
-}
-
-function excerpt(text: string, queryTokens: string[]) {
-  const clean = text.replace(/\s+/g, " ").trim();
-  const lower = clean.toLowerCase();
-  const index = queryTokens
-    .map((token) => lower.indexOf(token))
-    .filter((item) => item >= 0)
-    .sort((a, b) => a - b)[0];
-  const start = Math.max(0, (index ?? 0) - 100);
-  return clean.slice(start, start + 420);
+  await updateFounderBrain(founderId, brain);
+  await refreshFounderGraph(founderId);
 }
 
 export async function searchAdvisorBrain(advisorId: string, query: string): Promise<SearchHit[]> {
   const brain = await getAdvisorBrain(advisorId);
   if (!brain) return [];
   const sources = await listSources(advisorId);
-  const tokens = query
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((token) => token.length > 2);
-
-  const documents: Array<Omit<SearchHit, "excerpt" | "score"> & { text: string }> = [
-    { source: "profile", slug: "profile", title: "Advisor Profile", text: brain.profile },
-    { source: "vision", slug: "vision", title: "Vision", text: brain.vision },
-    { source: "direction", slug: "direction", title: "Direction", text: brain.direction },
-    { source: "memory", slug: "memory", title: "Founder Memory", text: brain.memory },
-    { source: "schema", slug: "schema", title: "The Schema", text: brain.schema },
+  const useFallback = await shouldUseGraphFallback();
+  const [fallbackSkill, graphifyDocuments] = await Promise.all([
+    useFallback ? loadGraphFallbackSkill() : Promise.resolve(null),
+    useFallback ? Promise.resolve([]) : readGraphifyRetrievalDocuments(),
+  ]);
+  const documents: RetrievalDocument[] = [
+    {
+      scope: "advisor",
+      source: "profile",
+      slug: "profile",
+      title: "Advisor Profile",
+      text: brain.profile,
+    },
+    { scope: "advisor", source: "vision", slug: "vision", title: "Vision", text: brain.vision },
+    {
+      scope: "advisor",
+      source: "direction",
+      slug: "direction",
+      title: "Direction",
+      text: brain.direction,
+    },
+    {
+      scope: "advisor",
+      source: "memory",
+      slug: "memory",
+      title: "Advisor Memory",
+      text: brain.memory,
+    },
+    {
+      scope: "advisor",
+      source: "schema",
+      slug: "schema",
+      title: "The Schema",
+      text: brain.schema,
+    },
     ...brain.wikiPages.map((page) => ({
+      scope: "advisor" as const,
       source: "wiki" as const,
       slug: page.slug,
       title: page.title,
       text: page.content,
     })),
-    ...brain.skills.map((page) => ({
-      source: "skill" as const,
-      slug: page.slug,
-      title: page.title,
-      text: page.content,
+    ...graphifyDocuments.map((document) => ({
+      scope: "advisor" as const,
+      source: "graph" as const,
+      slug: document.slug,
+      title: document.title,
+      text: document.content,
     })),
+    ...(fallbackSkill
+      ? [
+          {
+            scope: "advisor" as const,
+            source: "fallback_skill" as const,
+            slug: "graph_fallback",
+            title: fallbackSkill.name,
+            text: fallbackSkill.content,
+          },
+          ...fallbackSkill.references.map((reference) => ({
+            scope: "advisor" as const,
+            source: "fallback_reference" as const,
+            slug: reference.slug,
+            title: reference.title,
+            text: reference.content,
+          })),
+        ]
+      : []),
     ...sources.map((source) => ({
+      scope: "advisor" as const,
       source: "source" as const,
       slug: source.id,
       title: source.title,
@@ -607,17 +860,50 @@ export async function searchAdvisorBrain(advisorId: string, query: string): Prom
     })),
   ];
 
-  return documents
-    .map((doc) => ({
-      source: doc.source,
-      slug: doc.slug,
-      title: doc.title,
-      excerpt: excerpt(doc.text, tokens),
-      score: scoreDocument(tokens, doc.text),
-    }))
-    .filter((hit) => hit.score > 0 || tokens.length === 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 6);
+  return graphifyRetrieve(documents, query, 6);
+}
+
+export async function searchFounderBrain(founderId: string, query: string): Promise<SearchHit[]> {
+  const brain = await getFounderBrain(founderId);
+  if (!brain) return [];
+
+  const documents: RetrievalDocument[] = [
+    {
+      scope: "founder",
+      source: "profile",
+      slug: "profile",
+      title: "Founder Profile",
+      text: brain.profile,
+    },
+    {
+      scope: "founder",
+      source: "memory",
+      slug: "memory",
+      title: "Founder Memory",
+      text: brain.memory,
+    },
+    {
+      scope: "founder",
+      source: "graph",
+      slug: "graph",
+      title: "Founder Graph",
+      text: brain.graph,
+    },
+  ];
+
+  return graphifyRetrieve(documents, query, 6);
+}
+
+export async function searchBuddyContext(
+  advisorId: string,
+  founderId: string,
+  query: string,
+): Promise<SearchHit[]> {
+  const [advisorHits, founderHits] = await Promise.all([
+    searchAdvisorBrain(advisorId, query),
+    searchFounderBrain(founderId, query),
+  ]);
+  return [...advisorHits, ...founderHits].sort((a, b) => b.score - a.score).slice(0, 10);
 }
 
 export async function readAdvisorPage(advisorId: string, slug: string) {
@@ -628,11 +914,45 @@ export async function readAdvisorPage(advisorId: string, slug: string) {
     { slug: "profile", title: "Advisor Profile", content: brain.profile },
     { slug: "vision", title: "Vision", content: brain.vision },
     { slug: "direction", title: "Direction", content: brain.direction },
-    { slug: "memory", title: "Founder Memory", content: brain.memory },
+    { slug: "memory", title: "Advisor Memory", content: brain.memory },
     { slug: "schema", title: "The Schema", content: brain.schema },
     ...brain.wikiPages,
-    ...brain.skills,
     ...sources.map((source) => ({ slug: source.id, title: source.title, content: source.body })),
+  ];
+  const useFallback = await shouldUseGraphFallback();
+  const graphifyDocuments = useFallback ? [] : await readGraphifyRetrievalDocuments();
+  pages.push(
+    ...graphifyDocuments.map((document) => ({
+      slug: document.slug,
+      title: document.title,
+      content: document.content,
+    })),
+  );
+  const fallbackSkill = useFallback ? await loadGraphFallbackSkill() : null;
+  if (fallbackSkill) {
+    pages.push({
+      slug: "graph_fallback",
+      title: fallbackSkill.name,
+      content: fallbackSkill.content,
+    });
+    pages.push(
+      ...fallbackSkill.references.map((reference) => ({
+        slug: reference.slug,
+        title: reference.title,
+        content: reference.content,
+      })),
+    );
+  }
+  return pages.find((page) => page.slug === slug) ?? null;
+}
+
+export async function readFounderPage(founderId: string, slug: string) {
+  const brain = await getFounderBrain(founderId);
+  if (!brain) return null;
+  const pages = [
+    { slug: "profile", title: "Founder Profile", content: brain.profile },
+    { slug: "memory", title: "Founder Memory", content: brain.memory },
+    { slug: "graph", title: "Founder Graph", content: brain.graph },
   ];
   return pages.find((page) => page.slug === slug) ?? null;
 }

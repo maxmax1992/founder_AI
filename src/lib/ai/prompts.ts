@@ -1,6 +1,8 @@
-import type { Advisor, AdvisorBrain, AdvisorSource } from "@/lib/types";
+import type { BuddyAnswerContext } from "@/lib/buddy-context";
+import { fallbackSkillAuditNote } from "@/lib/graph-fallback-skill";
+import type { Advisor, AdvisorBrain, AdvisorSource, SearchHit } from "@/lib/types";
 
-const GLOBAL_VISION = `Sprint Buddy helps founders become more honest, decisive, and self-aware during the Aalto Founder Sprint.
+const GLOBAL_VISION = `Founder's harness helps founders become more honest, decisive, and self-aware during the Aalto Founder Sprint.
 
 It is a private coach first. It must not make the founder feel monitored.
 It should help the founder notice avoided truths, frame hard conversations, and choose the next concrete action.`;
@@ -45,31 +47,75 @@ function renderSourceInventory(sources: AdvisorSource[], charCap = 9000) {
   return `# Raw Source Inventory\n${text}`;
 }
 
-function buddyContextMap(advisor: Advisor) {
+function renderSearchHits(label: string, hits: SearchHit[]) {
+  if (hits.length === 0) return `# ${label}\nNo direct retrieval hits for the latest question.`;
+  const text = hits
+    .map((hit) =>
+      [
+        `- [${hit.scope}:${hit.source}:${hit.slug}; ${hit.retrieval ?? "text"} retrieval] ${hit.title}: ${hit.excerpt || "No excerpt."}`,
+        ...(hit.relationships ?? []).map((row) => `  - graphify: ${row}`),
+      ].join("\n"),
+    )
+    .join("\n");
+  return `# ${label}\n${text}`;
+}
+
+function buddyContextMap(advisor: Advisor, founderName: string) {
   return `# Context Lookup Map
-Use the context below as a local advisor wiki for ${advisor.name}. When answering, look in these places:
+Use the context below as two disconnected but queryable graphs.
+
+Advisor context graph: ${advisor.name}'s stable advisor essence.
+Founder graph: ${founderName}'s private conversation history and founder-owned context.
 
 1. Active Advisor: use the advisor name and description for identity and scope.
 2. Advisor Profile (profile.md): use for advisor voice, background, and perspective.
 3. Advisor Vision (vision.md): use for the long-term founder outcome.
 4. Advisor Direction (direction.md): use for response rules and coaching constraints.
-5. Founder Memory (memory.md): use for founder-specific history and preferences.
-6. LLM Wiki Schema (schema.md): use for wiki maintenance rules and source-handling policy.
-7. Advisor Wiki (wiki/*.md): prefer these pages for distilled principles, frameworks, and synthesized claims.
-8. Advisor Skills (skills/*.md): use these pages for repeatable coaching moves.
-9. Raw Source Inventory (sources/*.md): use these primary sources when the user asks for evidence, the wiki is thin, or a synthesized claim needs grounding.
+5. LLM Wiki Schema (schema.md): use for wiki maintenance rules and source-handling policy.
+6. Advisor Wiki (wiki/*.md): prefer these pages for distilled principles, frameworks, and synthesized claims.
+7. Raw Source Inventory (sources/*.md): use these primary sources when the user asks for evidence, the wiki is thin, or a synthesized claim needs grounding.
+8. Graphify output: when available, prefer graphify-out for relationship context and graph browsing.
+9. Graph Fallback Skill: when Graphify is disabled or unavailable, treat .skills/graph_fallback/SKILL.md as mandatory context-audit routing.
+10. Founder Profile and Memory: use only for ${founderName}'s private context, patterns, decisions, and history.
+11. Founder Graph (graph.md): use for founder-owned context relationships.
 
-If the user asks where a fact came from, name the layer and the file or source title. If a layer is empty or does not support the answer, say that directly instead of filling the gap.`;
+If the user asks where a fact came from, name the scope and layer, for example advisor/wiki or founder/memory. If a layer is empty or does not support the answer, say that directly instead of filling the gap.`;
 }
 
-export function buddySystemPrompt(advisor: Advisor, brain: AdvisorBrain, sources: AdvisorSource[]) {
+function renderFallbackSkill(context: BuddyAnswerContext) {
+  const skill = context.graphFallbackSkill;
+  if (context.graphifyEnabled) {
+    return "# Graphify Mode\nGraphify is enabled. Prefer graphify-out relationship context when available.";
+  }
+  if (!skill) {
+    return "# Graph Fallback Skill\nGraph fallback is active, but .skills/graph_fallback/SKILL.md was not found.";
+  }
+  const refs =
+    skill.references
+      .map((reference) => `## ${reference.relativePath}\n${reference.content}`)
+      .join("\n\n") || "No fallback references found.";
+  return `# Graph Fallback Skill
+Graph fallback is active because Graphify is disabled or graphify-out is unavailable. You must audit this skill before every substantive answer.
+
+## Entrypoint: ${skill.relativePath}
+${skill.content}
+
+# Graph Fallback References
+${refs}`;
+}
+
+export function buddySystemPrompt(context: BuddyAnswerContext) {
+  const { advisor, advisorBrain: brain, advisorSources: sources, founder, founderBrain } = context;
   return `${GLOBAL_VISION}
 
-${buddyContextMap(advisor)}
+${buddyContextMap(advisor, founder.name)}
 
 # Active Advisor
-${advisor.name}
+Advisor: ${advisor.name}
 ${advisor.description}
+
+# Active Founder
+Founder: ${founder.name}
 
 # Advisor Profile
 ${brain.profile}
@@ -80,7 +126,7 @@ ${brain.vision}
 # Advisor Direction
 ${brain.direction}
 
-# Founder Memory
+# Advisor Memory
 ${brain.memory}
 
 # LLM Wiki Schema
@@ -88,15 +134,30 @@ ${brain.schema}
 
 ${renderPages("Advisor Wiki", "wiki", brain.wikiPages)}
 
-${renderPages("Advisor Skills", "skills", brain.skills)}
-
 ${renderSourceInventory(sources)}
+
+${renderFallbackSkill(context)}
+
+# Founder Profile
+${founderBrain.profile}
+
+# Founder Memory
+${founderBrain.memory}
+
+# Founder Graph
+${founderBrain.graph}
+
+${renderSearchHits("Relevant Advisor Retrieval", context.advisorHits)}
+
+${renderSearchHits("Relevant Founder Retrieval", context.founderHits)}
 
 # Response Policy
 - If the advisor wiki is thin, say what is missing instead of inventing advisor-specific advice.
+- If graph fallback is active, use the Graph Fallback Skill audit before answering and include a concise fallback audit note.
+- Keep advisor essence and founder context separate: do not attribute founder history to the advisor.
 - Name the real issue in one concise sentence.
 - Reflect relevant founder history when it helps.
-- Apply one advisor principle or skill from the wiki when available.
+- Apply one advisor principle from the wiki when available.
 - Prefer distilled wiki pages for synthesis, and use raw sources for grounding or conflict checks.
 - Ask one uncomfortable but useful question.
 - End with one concrete next action the founder can take within 24 hours.
@@ -108,7 +169,7 @@ export function workshopSystemPrompt(
   brain: AdvisorBrain,
   sources: AdvisorSource[],
 ) {
-  return `You are the user-in-the-loop editor for Sprint Buddy advisor brains.
+  return `You are the user-in-the-loop editor for Founder's harness advisor brains.
 
 The user is building the advisor named ${advisor.name}. Help them maintain a local LLM-wiki, not a black-box upload.
 
@@ -128,8 +189,6 @@ ${brain.schema}
 
 ${renderPages("Wiki Pages", "wiki", brain.wikiPages, 6000)}
 
-${renderPages("Skills", "skills", brain.skills, 6000)}
-
 # Sources
 ${
   sources
@@ -146,7 +205,7 @@ Guide the user through:
 2. Draft or refine vision.
 3. Draft or refine advisor direction.
 4. Propose wiki pages.
-5. Propose skills.
+5. Propose fallback references for .skills/graph_fallback/references when Graphify is disabled.
 
 Important:
 - If a source is marked needs_review, ask the user to verify or edit it before treating it as authoritative.
@@ -154,19 +213,35 @@ Important:
 - Provide copy-ready markdown drafts and tell the user which editor field they should paste or update.`;
 }
 
-export function fallbackBuddyAnswer(userText: string, advisor: Advisor, brain: AdvisorBrain) {
-  const principle = brain.skills[0]?.title ?? "hard question, then next action";
+export function fallbackBuddyAnswer(userText: string, context: BuddyAnswerContext) {
+  const { advisor, advisorBrain: brain, founder, founderBrain } = context;
+  const advisorLens =
+    firstLine(brain.direction) || firstLine(brain.vision) || "hard question, then next action";
+  const audit = context.graphifyEnabled
+    ? "Graphify enabled: graphify-out is preferred when available."
+    : fallbackSkillAuditNote(context.graphFallbackSkill, context.advisorHits);
   return `The real issue seems to be deciding what truth needs to be faced before the next founder move.
 
-I am using ${advisor.name}'s current advisor brain, but live Codex credentials are not configured. Run \`codex login\` for Codex CLI SSO or configure a direct API key.
+I am using Advisor: ${advisor.name} and Founder: ${founder.name}, but live Codex credentials are not configured. Run \`codex login\` for Codex CLI SSO or configure a direct API key.
 
-Advisor lens: ${principle}.
+Advisor lens: ${advisorLens}.
+
+Founder context: ${firstLine(founderBrain.memory) || firstLine(founderBrain.profile) || "No durable founder memory yet."}
+
+${audit}
 
 Hard question: what are you avoiding saying out loud because it might force a decision?
 
 Next action: write the one sentence version of the conversation you need to have, then send a message today to schedule it.
 
 Your note: "${userText.slice(0, 180)}"`;
+}
+
+function firstLine(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line && !line.startsWith("#"));
 }
 
 export function fallbackWorkshopAnswer(advisor: Advisor) {
@@ -178,7 +253,7 @@ For ${advisor.name}, use this editing workflow:
 2. Write the advisor vision as the long-term founder outcome.
 3. Write direction as answer rules.
 4. Create one wiki page per framework, story, or principle.
-5. Create one skill per repeatable coaching behavior.
+5. Add fallback-reference notes under .skills/graph_fallback/references when Graphify is disabled.
 
 Copy-ready starter:
 

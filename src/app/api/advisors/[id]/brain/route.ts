@@ -35,10 +35,6 @@ export async function PATCH(req: Request, { params }: Params) {
       ...page,
       updatedAt: page.updatedAt ?? Date.now(),
     })),
-    skills: parsed.data.skills.map((page) => ({
-      ...page,
-      updatedAt: page.updatedAt ?? Date.now(),
-    })),
   });
   const advisor = await getAdvisor(id);
   if (!advisor || !brain) return errorJson("not_found", "Advisor not found", 404);
