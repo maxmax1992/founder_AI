@@ -92,7 +92,7 @@ type BrainSaveState = "idle" | "pending" | "saving" | "saved" | "error";
 type EditableBrainField = "profile" | "vision" | "direction" | "memory" | "schema";
 
 interface GraphSourceDocument {
-  kind: "core" | "schema" | "wiki" | "source";
+  kind: "core" | "schema" | "wiki" | "source" | "graph-source";
   path: string;
   title: string;
   body: string;
@@ -100,9 +100,17 @@ interface GraphSourceDocument {
   sourceUrl?: string;
   extractionNote?: string;
   onTitleChange?: (value: string) => void;
-  onBodyChange: (value: string) => void;
+  onBodyChange?: (value: string) => void;
   onSourceUrlChange?: (value: string) => void;
   onSave?: () => void | Promise<void>;
+}
+
+interface GraphSourceDocumentResponse {
+  path: string;
+  title: string;
+  body: string;
+  badges: string[];
+  extractionNote?: string;
 }
 
 interface GraphForce {
@@ -1266,61 +1274,6 @@ function MessageList({ messages, advisor }: { messages: AppUIMessage[]; advisor:
           </div>
         </div>
       ))}
-
-      {/* Inline check-in card mockup for end of chat if last message was assistant */}
-      {messages.length > 0 && messages[messages.length - 1].role === "assistant" && (
-        <div className="flex gap-[14px]">
-          <div className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full bg-brand font-sans text-[12px] text-brand-foreground">
-            ✦
-          </div>
-          <div className="min-w-0 flex-1 pt-[2px]">
-            <div className="mb-1.5 flex items-center gap-2 font-mono text-[10.5px] text-fg-4">
-              <span className="text-brand">Check-in</span>
-              <span>·</span>
-              <span>2 of 3</span>
-              <span>·</span>
-              <span>private to you</span>
-            </div>
-            <div className="rounded-[10px] border border-line-soft bg-bg-2 px-[18px] py-4 pb-[15px]">
-              <div className="mb-[10px] flex items-center justify-between">
-                <div className="flex items-center gap-[7px] font-mono text-[10px] uppercase tracking-[0.14em] text-brand before:h-[5px] before:w-[5px] before:rounded-full before:bg-brand">
-                  The uncomfortable one
-                </div>
-                <button type="button" className="font-mono text-[10.5px] text-fg-4 hover:text-fg-2">
-                  skip
-                </button>
-              </div>
-              <div className="font-serif text-[22px] tracking-[-0.005em] leading-[1.25] text-foreground">
-                What are you <em>pretending</em> not to know?
-              </div>
-              <div className="mt-2 text-[12.5px] leading-[1.5] text-fg-3">
-                One sentence is enough. No one sees this but you and Founder&apos;s Chat.
-              </div>
-              <div className="mt-3.5 flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  className="rounded-full border border-line-soft bg-transparent px-[11px] py-[6px] text-[12px] text-fg-2 transition-all hover:border-line hover:text-foreground"
-                >
-                  Type it
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-line-soft bg-transparent px-[11px] py-[6px] text-[12px] text-fg-2 transition-all hover:border-line hover:text-foreground"
-                >
-                  <Mic className="h-[11px] w-[11px] text-fg-3" />
-                  Speak
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full border border-line-soft bg-transparent px-[11px] py-[6px] text-[12px] text-fg-2 transition-all hover:border-line hover:text-foreground"
-                >
-                  Ask me something easier
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
@@ -2089,13 +2042,13 @@ function LlmWikiEditor({
         };
       }
 
-      const sourceChunkMatch = /^sources\/([^/]+)\/chunk-(\d+)\.md$/.exec(localPath);
-      const sourceMatch = sourceChunkMatch ? null : /^sources\/([^/]+)\.md$/.exec(localPath);
-      const sourceId = sourceChunkMatch?.[1] ?? sourceMatch?.[1];
+      if (/^sources\/[^/]+\/chunk-\d+\.md$/.test(localPath)) return null;
+
+      const sourceMatch = /^sources\/([^/]+)\.md$/.exec(localPath);
+      const sourceId = sourceMatch?.[1];
       if (sourceId) {
         const source = sources.find((item) => item.id === sourceId);
         if (!source) return null;
-        const chunkBadge = sourceChunkMatch ? [`chunk ${sourceChunkMatch[2]}`] : [];
         return {
           kind: "source",
           path: sourceFile,
@@ -2103,7 +2056,7 @@ function LlmWikiEditor({
           body: source.body,
           sourceUrl: source.sourceUrl,
           extractionNote: source.extractionNote,
-          badges: [source.kind ?? "text", source.status ?? "ready", ...chunkBadge],
+          badges: [source.kind ?? "text", source.status ?? "ready"],
           onTitleChange: (value) => onSourceChangeSelected({ ...source, title: value }),
           onBodyChange: (value) => onSourceChangeSelected({ ...source, body: value }),
           onSourceUrlChange:
@@ -2482,8 +2435,11 @@ function GraphifyLayer({
   const [report, setReport] = React.useState("");
   const [graphError, setGraphError] = React.useState("");
   const [selectedNodeId, setSelectedNodeId] = React.useState("");
-  const [sourceNavStatus, setSourceNavStatus] = React.useState("");
   const [openSourceFile, setOpenSourceFile] = React.useState("");
+  const [openGraphSourceDocument, setOpenGraphSourceDocument] =
+    React.useState<GraphSourceDocument | null>(null);
+  const [openGraphSourceError, setOpenGraphSourceError] = React.useState("");
+  const [isOpenGraphSourceLoading, setIsOpenGraphSourceLoading] = React.useState(false);
 
   React.useEffect(() => {
     if (!status?.graphify.hasGraphJson) return;
@@ -2527,6 +2483,57 @@ function GraphifyLayer({
     };
   }, [advisorId, advisorName, status]);
 
+  React.useEffect(() => {
+    if (!openSourceFile) {
+      setOpenGraphSourceDocument(null);
+      setOpenGraphSourceError("");
+      setIsOpenGraphSourceLoading(false);
+      return;
+    }
+    if (resolveSource(openSourceFile)) {
+      setOpenGraphSourceDocument(null);
+      setOpenGraphSourceError("");
+      setIsOpenGraphSourceLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    async function loadGraphSourceDocument() {
+      setOpenGraphSourceDocument(null);
+      setOpenGraphSourceError("");
+      setIsOpenGraphSourceLoading(true);
+      try {
+        const response = await fetch(
+          `/api/graphify/source?path=${encodeURIComponent(openSourceFile)}`,
+        );
+        if (!response.ok) throw new Error(`Graph source failed (${response.status})`);
+        const payload = (await response.json()) as GraphSourceDocumentResponse;
+        if (cancelled) return;
+        setOpenGraphSourceDocument({
+          kind: "graph-source",
+          path: payload.path,
+          title: payload.title,
+          body: payload.body,
+          badges: payload.badges,
+          extractionNote: payload.extractionNote,
+        });
+      } catch (err) {
+        if (!cancelled) {
+          setOpenGraphSourceError(
+            err instanceof Error ? err.message : "Failed to load Graphify source document",
+          );
+        }
+      } finally {
+        if (!cancelled) setIsOpenGraphSourceLoading(false);
+      }
+    }
+
+    void loadGraphSourceDocument();
+    return () => {
+      cancelled = true;
+    };
+  }, [openSourceFile, resolveSource]);
+
   if (error) {
     return <EmptyPanel title="Graph status unavailable" body={error} />;
   }
@@ -2538,7 +2545,9 @@ function GraphifyLayer({
   const { graphify } = status;
   const graphifyUsable = graphify.enabled && graphify.hasGraphifyOut && graphify.hasGraphJson;
   const selectedNode = graph?.nodes.find((node) => node.id === selectedNodeId) ?? null;
-  const openDocument = openSourceFile ? resolveSource(openSourceFile) : null;
+  const openDocument = openSourceFile
+    ? (resolveSource(openSourceFile) ?? openGraphSourceDocument)
+    : null;
   const relatedLinks = selectedNode
     ? (graph?.links ?? []).filter(
         (link) => link.source === selectedNode.id || link.target === selectedNode.id,
@@ -2610,7 +2619,8 @@ function GraphifyLayer({
                     size="sm"
                     onClick={() => {
                       setOpenSourceFile("");
-                      setSourceNavStatus("");
+                      setOpenGraphSourceError("");
+                      setOpenGraphSourceDocument(null);
                     }}
                   >
                     <ArrowLeft className="size-4" />
@@ -2654,7 +2664,6 @@ function GraphifyLayer({
                   selectedNodeId={selectedNodeId}
                   onSelectNode={(id) => {
                     setSelectedNodeId(id);
-                    setSourceNavStatus("");
                   }}
                 />
               ) : (
@@ -2671,8 +2680,13 @@ function GraphifyLayer({
                     <GraphSourceEditor key={openDocument.path} document={openDocument} />
                   ) : (
                     <EmptyPanel
-                      title="Source unavailable"
-                      body="This graph node is outside the editable advisor files."
+                      title={isOpenGraphSourceLoading ? "Loading source" : "Source unavailable"}
+                      body={
+                        isOpenGraphSourceLoading
+                          ? "Opening the generated Graphify source document."
+                          : openGraphSourceError ||
+                            "This graph node is outside the editable advisor files and generated Graphify corpus."
+                      }
                     />
                   )}
                 </div>
@@ -2716,21 +2730,12 @@ function GraphifyLayer({
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      const document = resolveSource(selectedNode.sourceFile);
-                      if (document) {
-                        setOpenSourceFile(selectedNode.sourceFile);
-                        setSourceNavStatus("");
-                        return;
-                      }
-                      setSourceNavStatus("This source is outside the selected advisor editor.");
+                      setOpenSourceFile(selectedNode.sourceFile);
                     }}
                   >
                     <FileText className="size-4" />
                     Open source
                   </Button>
-                )}
-                {sourceNavStatus && (
-                  <p className="text-muted-foreground text-xs">{sourceNavStatus}</p>
                 )}
                 <div className="min-h-0 flex-1">
                   <p className="text-muted-foreground mb-2 font-mono text-[10px] uppercase tracking-wider">
@@ -2848,8 +2853,9 @@ function GraphSourceEditor({ document }: { document: GraphSourceDocument }) {
 
       <Textarea
         value={document.body}
+        readOnly={!document.onBodyChange}
         onChange={(event) => {
-          document.onBodyChange(event.target.value);
+          document.onBodyChange?.(event.target.value);
           if (document.onSave) setSaveState("idle");
         }}
         className="min-h-[420px] flex-1 resize-none font-mono text-sm"
@@ -2870,7 +2876,9 @@ function GraphSourceEditor({ document }: { document: GraphSourceDocument }) {
                 : saveState === "error"
                   ? "Save failed"
                   : "Unsaved source edits"
-            : "Autosaves"}
+            : document.onBodyChange
+              ? "Autosaves"
+              : "Read-only"}
         </span>
         {document.onSave && (
           <Button type="button" variant="outline" size="sm" onClick={() => void saveDocument()}>

@@ -1,0 +1,132 @@
+{
+  "communities": {
+    "0": [
+      "founder_operating_principles",
+      "founders_harness_challenge",
+      "hackerone",
+      "marten_mickos",
+      "mysql"
+    ],
+    "1": [
+      "aws",
+      "eucalyptus_systems",
+      "openstack"
+    ],
+    "2": [
+      "marten_mickos_tweets_chunk_019"
+    ]
+  },
+  "cohesion": {
+    "0": 0.4,
+    "1": 0.67,
+    "2": 1.0
+  },
+  "gods": [
+    {
+      "id": "marten_mickos",
+      "label": "Marten Mickos",
+      "degree": 5
+    },
+    {
+      "id": "eucalyptus_systems",
+      "label": "Eucalyptus Systems",
+      "degree": 3
+    },
+    {
+      "id": "mysql",
+      "label": "MySQL",
+      "degree": 1
+    },
+    {
+      "id": "hackerone",
+      "label": "HackerOne",
+      "degree": 1
+    },
+    {
+      "id": "aws",
+      "label": "Amazon Web Services (AWS)",
+      "degree": 1
+    },
+    {
+      "id": "openstack",
+      "label": "OpenStack",
+      "degree": 1
+    },
+    {
+      "id": "founder_operating_principles",
+      "label": "Founder Operating Principles",
+      "degree": 1
+    },
+    {
+      "id": "founders_harness_challenge",
+      "label": "Founder's Harness Challenge",
+      "degree": 1
+    },
+    {
+      "id": "marten_mickos_tweets_chunk_019",
+      "label": "Marten Mickos Tweets - Part 19",
+      "degree": 0
+    }
+  ],
+  "surprises": [
+    {
+      "source": "Founder Operating Principles",
+      "target": "Marten Mickos",
+      "source_files": [
+        "advisors/marten-mickos/wiki/founder-operating-principles.md",
+        "advisors/marten-mickos/wiki/source-index.md"
+      ],
+      "confidence": "INFERRED",
+      "relation": "references",
+      "why": "inferred connection - not explicitly stated in source; peripheral node `Founder Operating Principles` unexpectedly reaches hub `Marten Mickos`"
+    },
+    {
+      "source": "Founder's Harness Challenge",
+      "target": "Marten Mickos",
+      "source_files": [
+        "advisors/marten-mickos/wiki/founders-harness-challenge.md",
+        "advisors/marten-mickos/wiki/source-index.md"
+      ],
+      "confidence": "INFERRED",
+      "relation": "conceptually_related_to",
+      "why": "inferred connection - not explicitly stated in source; peripheral node `Founder's Harness Challenge` unexpectedly reaches hub `Marten Mickos`"
+    },
+    {
+      "source": "Marten Mickos",
+      "target": "Eucalyptus Systems",
+      "source_files": [
+        "advisors/marten-mickos/wiki/source-index.md",
+        "advisors/marten-mickos/sources/marten-mickos-tweets/chunk-019.md"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "bridges separate communities"
+    },
+    {
+      "source": "Marten Mickos",
+      "target": "MySQL",
+      "source_files": [
+        "advisors/marten-mickos/wiki/source-index.md",
+        "advisors/marten-mickos/sources/marten-mickos-tweets/chunk-019.md"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "peripheral node `MySQL` unexpectedly reaches hub `Marten Mickos`"
+    },
+    {
+      "source": "Marten Mickos",
+      "target": "HackerOne",
+      "source_files": [
+        "advisors/marten-mickos/wiki/source-index.md",
+        "advisors/marten-mickos/wiki/compiled-source-signals.md"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "peripheral node `HackerOne` unexpectedly reaches hub `Marten Mickos`"
+    }
+  ],
+  "tokens": {
+    "input": 22761,
+    "output": 1062
+  }
+}

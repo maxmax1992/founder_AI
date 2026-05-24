@@ -1,0 +1,61 @@
+[
+  {
+    "id": "marten-mickos-online-resources",
+    "advisorId": "marten-mickos",
+    "title": "Marten Mickos Online Resources",
+    "kind": "docx",
+    "sourceUrl": "Marten Mickos Online Resources.docx",
+    "status": "ready",
+    "createdAt": 1779605797283,
+    "updatedAt": 1779605797283
+  },
+  {
+    "id": "marten-mickos-articles-on-linkedin",
+    "advisorId": "marten-mickos",
+    "title": "Marten Mickos Articles on LinkedIn",
+    "kind": "docx",
+    "sourceUrl": "Marten Mickos Articles on LinkedIn.docx",
+    "status": "ready",
+    "createdAt": 1779605829620,
+    "updatedAt": 1779605829620
+  },
+  {
+    "id": "marten-mickos-quora-answers",
+    "advisorId": "marten-mickos",
+    "title": "Marten Mickos Quora Answers",
+    "kind": "docx",
+    "sourceUrl": "Marten Mickos Quora Answers.docx",
+    "status": "ready",
+    "createdAt": 1779605830136,
+    "updatedAt": 1779605830136
+  },
+  {
+    "id": "marten-mickos-social-media-postings",
+    "advisorId": "marten-mickos",
+    "title": "Marten Mickos Social Media Postings",
+    "kind": "docx",
+    "sourceUrl": "Marten Mickos Social Media Postings.docx",
+    "status": "ready",
+    "createdAt": 1779605830652,
+    "updatedAt": 1779605830652
+  },
+  {
+    "id": "marten-mickos-tweets",
+    "advisorId": "marten-mickos",
+    "title": "Marten Mickos Tweets",
+    "kind": "docx",
+    "sourceUrl": "Marten Mickos Tweets.docx",
+    "status": "ready",
+    "createdAt": 1779606937356,
+    "updatedAt": 1779606937356
+  },
+  {
+    "id": "marten-mickos-quote-success-and-regret",
+    "advisorId": "marten-mickos",
+    "title": "Marten Mickos Quote - Success and Regret",
+    "kind": "text",
+    "status": "ready",
+    "createdAt": 1779606939203,
+    "updatedAt": 1779606939203
+  }
+]

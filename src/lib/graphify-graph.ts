@@ -29,6 +29,18 @@ export interface NormalizeGraphifyOptions {
   advisorName?: string;
 }
 
+const DEMO_SOURCE_OVERRIDES_BY_ADVISOR: Record<string, Record<string, string>> = {
+  "marten-mickos": {
+    "amazon web services (aws)": "sources/marten-mickos-quora-answers.md",
+    aws: "sources/marten-mickos-quora-answers.md",
+    "eucalyptus systems": "sources/marten-mickos-online-resources.md",
+    eucalyptus_systems: "sources/marten-mickos-online-resources.md",
+    hackerone: "sources/marten-mickos-articles-on-linkedin.md",
+    mysql: "sources/marten-mickos-quora-answers.md",
+    openstack: "sources/marten-mickos-online-resources.md",
+  },
+};
+
 interface RawGraphifyNode {
   id?: unknown;
   label?: unknown;
@@ -96,10 +108,12 @@ export function graphifySourceLabel(sourceFile: string) {
 function normalizeNode(node: RawGraphifyNode, options: NormalizeGraphifyOptions) {
   const id = stringValue(node.id);
   if (!id) return null;
-  const sourceFile = graphifySourceLabel(stringValue(node.source_file));
+  const rawSourceFile = graphifySourceLabel(stringValue(node.source_file));
+  const fallbackLabel = stringValue(node.label) || id;
+  const sourceFile = sourceOverrideForAdvisor(rawSourceFile, id, fallbackLabel, options.advisorId);
   return {
     id,
-    label: labelForSource(sourceFile, stringValue(node.label) || id, options.advisorId),
+    label: labelForSource(sourceFile, fallbackLabel, options.advisorId),
     sourceFile,
     fileType: stringValue(node.file_type) || "document",
     community: numberValue(node.community),
@@ -139,6 +153,20 @@ function isGraphMdSource(sourceFile: string) {
 function belongsToAdvisor(sourceFile: string, advisorId?: string) {
   if (!advisorId) return true;
   return sourceFile.startsWith(`advisors/${advisorId}/`);
+}
+
+function sourceOverrideForAdvisor(
+  sourceFile: string,
+  nodeId: string,
+  nodeLabel: string,
+  advisorId?: string,
+) {
+  if (!advisorId) return sourceFile;
+  const overrides = DEMO_SOURCE_OVERRIDES_BY_ADVISOR[advisorId];
+  if (!overrides) return sourceFile;
+  const localOverride =
+    overrides[normalizeOverrideKey(nodeId)] ?? overrides[normalizeOverrideKey(nodeLabel)];
+  return localOverride ? `advisors/${advisorId}/${localOverride}` : sourceFile;
 }
 
 function advisorRootNode(options: NormalizeGraphifyOptions): GraphifyGraphNode | null {
@@ -199,6 +227,10 @@ function titleFromSlug(slug: string) {
     .filter(Boolean)
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
     .join(" ");
+}
+
+function normalizeOverrideKey(value: string) {
+  return value.trim().toLowerCase();
 }
 
 function stringValue(value: unknown) {

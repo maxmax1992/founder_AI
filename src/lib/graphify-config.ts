@@ -3,6 +3,7 @@ import path from "node:path";
 
 const ROOT = process.cwd();
 const GRAPHIFY_OUT_DIR = path.join(ROOT, "graphify-out");
+const GRAPHIFY_CORPUS_DIR = path.join(ROOT, ".graphify-corpus");
 const HTML_CANDIDATES = ["GRAPH_TREE.html", "graph.html", "index.html"];
 
 export interface GraphifyRuntimeStatus {
@@ -19,6 +20,12 @@ export interface GraphifyRuntimeStatus {
 export interface GraphifyRetrievalDocument {
   slug: string;
   title: string;
+  content: string;
+}
+
+export interface GraphifySourceDocument {
+  sourceFile: string;
+  path: string;
   content: string;
 }
 
@@ -70,6 +77,21 @@ export async function readGraphifyArtifact(file: string) {
   };
 }
 
+export async function readGraphifySourceDocument(sourceFile: string) {
+  const safeSourceFile = normalizeGraphifySourceFile(sourceFile);
+  if (!safeSourceFile) return null;
+  const sourcePath = path.join(GRAPHIFY_CORPUS_DIR, safeSourceFile);
+  const relativePath = path.relative(GRAPHIFY_CORPUS_DIR, sourcePath);
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) return null;
+  if (!(await exists(sourcePath))) return null;
+
+  return {
+    sourceFile: safeSourceFile,
+    path: sourcePath,
+    content: await fs.readFile(sourcePath, "utf8"),
+  } satisfies GraphifySourceDocument;
+}
+
 export async function readGraphifyRetrievalDocuments(): Promise<GraphifyRetrievalDocument[]> {
   const status = await getGraphifyRuntimeStatus();
   if (!hasUsableGraphifyArtifacts(status)) return [];
@@ -101,6 +123,21 @@ async function firstExisting(paths: string[]) {
     if (await exists(candidate)) return candidate;
   }
   return null;
+}
+
+function normalizeGraphifySourceFile(sourceFile: string) {
+  const cleaned = sourceFile
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\.graphify-corpus\//, "")
+    .replace(/^data\//, "");
+  if (!cleaned || cleaned.includes("\0") || cleaned.startsWith("/")) return null;
+
+  const normalized = path.posix.normalize(cleaned);
+  if (normalized === "." || normalized === ".." || normalized.startsWith("../")) return null;
+  const extension = path.posix.extname(normalized).toLowerCase();
+  if (![".md", ".markdown", ".txt"].includes(extension)) return null;
+  return normalized;
 }
 
 async function exists(filePath: string) {

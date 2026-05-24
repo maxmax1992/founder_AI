@@ -1,0 +1,985 @@
+{
+  "version": 1,
+  "advisors": [
+    {
+      "id": "demo-advisor",
+      "name": "Demo Advisor",
+      "description": "Demo advisor",
+      "createdAt": 1779471870444,
+      "updatedAt": 1779604107919
+    },
+    {
+      "id": "marten-mickos",
+      "name": "Marten Mickos",
+      "description": "Aalto Founder Sprint advisor voice grounded in Marten Mickos source material.",
+      "createdAt": 1779605543289,
+      "updatedAt": 1779612961100
+    }
+  ],
+  "founders": [
+    {
+      "id": "local-founder",
+      "name": "Local Founder",
+      "createdAt": 1779566480899,
+      "updatedAt": 1779612943223
+    }
+  ],
+  "conversations": [
+    {
+      "id": "smoke-chat",
+      "advisorId": "demo-advisor",
+      "title": "I am avoiding a cofounder conversation",
+      "createdAt": 1779471871635,
+      "updatedAt": 1779471871635
+    },
+    {
+      "id": "AYF4eBQ5P6QoHzBT",
+      "advisorId": "demo-advisor",
+      "title": "how are you?",
+      "createdAt": 1779472008455,
+      "updatedAt": 1779472008455
+    },
+    {
+      "id": "Z5hVabR6Kt1M7MX3",
+      "advisorId": "demo-advisor",
+      "title": "how are we doing?",
+      "createdAt": 1779472023054,
+      "updatedAt": 1779472026985
+    },
+    {
+      "id": "provider-smoke",
+      "advisorId": "demo-advisor",
+      "title": "Test streaming provider setup",
+      "createdAt": 1779472175992,
+      "updatedAt": 1779472175992
+    },
+    {
+      "id": "provider-smoke-2",
+      "advisorId": "demo-advisor",
+      "title": "Test provider error rendering",
+      "createdAt": 1779472245214,
+      "updatedAt": 1779472245214
+    },
+    {
+      "id": "WB8MmgZqiV629cji",
+      "advisorId": "demo-advisor",
+      "title": "hi",
+      "createdAt": 1779473005459,
+      "updatedAt": 1779473005459
+    },
+    {
+      "id": "PLyb7xLWJZEevR19",
+      "advisorId": "demo-advisor",
+      "title": "hi",
+      "createdAt": 1779473036175,
+      "updatedAt": 1779473036175
+    },
+    {
+      "id": "ZEvxCriLrTJPMYiA",
+      "advisorId": "demo-advisor",
+      "title": "how are you",
+      "createdAt": 1779473065495,
+      "updatedAt": 1779473065495
+    },
+    {
+      "id": "x9cY7nz6sH6RVKLk",
+      "advisorId": "demo-advisor",
+      "title": "how are you",
+      "createdAt": 1779477034453,
+      "updatedAt": 1779477034453
+    },
+    {
+      "id": "vFS063uYIprZG6yA",
+      "advisorId": "demo-advisor",
+      "title": "say hello world",
+      "createdAt": 1779477061301,
+      "updatedAt": 1779477061301
+    },
+    {
+      "id": "DGaT7qziMykxoz4C",
+      "advisorId": "demo-advisor",
+      "title": "Write five short lines. Put each line on its own line.",
+      "createdAt": 1779477369578,
+      "updatedAt": 1779477608174
+    },
+    {
+      "id": "iuvvrvG6aMYITNLW",
+      "advisorId": "demo-advisor",
+      "title": "Write ten short words separated by spaces.",
+      "createdAt": 1779477644658,
+      "updatedAt": 1779477644658
+    },
+    {
+      "id": "4CPaYaJ2VqmsDym3",
+      "advisorId": "demo-advisor",
+      "title": "Reply exactly with three lines: alpha, beta, gamma. No bulle",
+      "createdAt": 1779478312407,
+      "updatedAt": 1779478377642
+    },
+    {
+      "id": "BZBV3KRGI5DCJKUa",
+      "advisorId": "demo-advisor",
+      "title": "Give me one practical founder tip for tomorrow.",
+      "createdAt": 1779485712650,
+      "updatedAt": 1779558963589
+    },
+    {
+      "id": "LxIzgNNk3Hevh4hK",
+      "advisorId": "demo-advisor",
+      "title": "How are you?",
+      "createdAt": 1779554910325,
+      "updatedAt": 1779554910325
+    },
+    {
+      "id": "2KAfdiLuAs2Nqfyd",
+      "advisorId": "marten-mickos",
+      "founderId": "local-founder",
+      "title": "Tell me about Marten Mickos tweets",
+      "createdAt": 1779607476862,
+      "updatedAt": 1779607476862
+    },
+    {
+      "id": "3segJXuy5Ze8gR0E",
+      "advisorId": "marten-mickos",
+      "founderId": "local-founder",
+      "title": "Give Marten's advice for today",
+      "createdAt": 1779611888359,
+      "updatedAt": 1779611888359
+    },
+    {
+      "id": "0EXBT0yVHs7rdEgF",
+      "advisorId": "demo-advisor",
+      "founderId": "local-founder",
+      "title": "What should I do today?",
+      "createdAt": 1779612217302,
+      "updatedAt": 1779612217302
+    },
+    {
+      "id": "Li5kPHTANec1nt3z",
+      "advisorId": "marten-mickos",
+      "founderId": "local-founder",
+      "title": "tell me something useful I need to know",
+      "createdAt": 1779612246411,
+      "updatedAt": 1779612246411
+    },
+    {
+      "id": "d5dUUAWOw3DaUP65",
+      "advisorId": "marten-mickos",
+      "founderId": "local-founder",
+      "title": "how are you?",
+      "createdAt": 1779612943218,
+      "updatedAt": 1779612943218
+    }
+  ],
+  "messages": [
+    {
+      "id": "u1",
+      "conversationId": "smoke-chat",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "I am avoiding a cofounder conversation"
+        }
+      ],
+      "createdAt": 1779471871635
+    },
+    {
+      "id": "mYc1fn3NJICClcF6",
+      "conversationId": "smoke-chat",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "text",
+          "text": "The real issue seems to be deciding what truth needs to be faced before the next founder move.\n\nI am using Demo Advisor's current advisor brain, but the live AI Gateway key is not configured, so this is a local fallback response rather than a model-generated answer.\n\nAdvisor lens: Hard Question, Then Next Action.\n\nHard question: what are you avoiding saying out loud because it might force a decision?\n\nNext action: write the one sentence version of the conversation you need to have, then send a message today to schedule it.\n\nYour note: \"I am avoiding a cofounder conversation\"",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779471871635
+    },
+    {
+      "id": "qCpZ94f7G21aTuaF",
+      "conversationId": "AYF4eBQ5P6QoHzBT",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "how are you?"
+        }
+      ],
+      "createdAt": 1779472008455
+    },
+    {
+      "id": "JoSlTvkje9aUawRx",
+      "conversationId": "AYF4eBQ5P6QoHzBT",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "text",
+          "text": "The real issue seems to be deciding what truth needs to be faced before the next founder move.\n\nI am using Demo Advisor's current advisor brain, but the live AI Gateway key is not configured, so this is a local fallback response rather than a model-generated answer.\n\nAdvisor lens: Hard Question, Then Next Action.\n\nHard question: what are you avoiding saying out loud because it might force a decision?\n\nNext action: write the one sentence version of the conversation you need to have, then send a message today to schedule it.\n\nYour note: \"how are you?\"",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779472008455
+    },
+    {
+      "id": "bmZV913oK98x2eV7",
+      "conversationId": "Z5hVabR6Kt1M7MX3",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "how are we doing?"
+        }
+      ],
+      "createdAt": 1779472026985
+    },
+    {
+      "id": "L0sLSGXiSiHe6EAp",
+      "conversationId": "Z5hVabR6Kt1M7MX3",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "text",
+          "text": "The real issue seems to be deciding what truth needs to be faced before the next founder move.\n\nI am using Demo Advisor's current advisor brain, but the live AI Gateway key is not configured, so this is a local fallback response rather than a model-generated answer.\n\nAdvisor lens: Hard Question, Then Next Action.\n\nHard question: what are you avoiding saying out loud because it might force a decision?\n\nNext action: write the one sentence version of the conversation you need to have, then send a message today to schedule it.\n\nYour note: \"how are we doing?\"",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779472026985
+    },
+    {
+      "id": "Pxyb7TV81645XHun",
+      "conversationId": "Z5hVabR6Kt1M7MX3",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "qqwe"
+        }
+      ],
+      "createdAt": 1779472026985
+    },
+    {
+      "id": "p6cHIELgCcGA4nrc",
+      "conversationId": "Z5hVabR6Kt1M7MX3",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "text",
+          "text": "The real issue seems to be deciding what truth needs to be faced before the next founder move.\n\nI am using Demo Advisor's current advisor brain, but the live AI Gateway key is not configured, so this is a local fallback response rather than a model-generated answer.\n\nAdvisor lens: Hard Question, Then Next Action.\n\nHard question: what are you avoiding saying out loud because it might force a decision?\n\nNext action: write the one sentence version of the conversation you need to have, then send a message today to schedule it.\n\nYour note: \"qqwe\"",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779472026985
+    },
+    {
+      "id": "6EUR5kZWPDCXU4Ur",
+      "conversationId": "Z5hVabR6Kt1M7MX3",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "wwwe"
+        }
+      ],
+      "createdAt": 1779472026985
+    },
+    {
+      "id": "ILCUn3XcZjPcLH2K",
+      "conversationId": "Z5hVabR6Kt1M7MX3",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "text",
+          "text": "The real issue seems to be deciding what truth needs to be faced before the next founder move.\n\nI am using Demo Advisor's current advisor brain, but the live AI Gateway key is not configured, so this is a local fallback response rather than a model-generated answer.\n\nAdvisor lens: Hard Question, Then Next Action.\n\nHard question: what are you avoiding saying out loud because it might force a decision?\n\nNext action: write the one sentence version of the conversation you need to have, then send a message today to schedule it.\n\nYour note: \"wwwe\"",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779472026985
+    },
+    {
+      "id": "u1",
+      "conversationId": "provider-smoke",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Test streaming provider setup"
+        }
+      ],
+      "createdAt": 1779472175992
+    },
+    {
+      "id": "",
+      "conversationId": "provider-smoke",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        }
+      ],
+      "createdAt": 1779472175992
+    },
+    {
+      "id": "u1",
+      "conversationId": "provider-smoke-2",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Test provider error rendering"
+        }
+      ],
+      "createdAt": 1779472245214
+    },
+    {
+      "id": "",
+      "conversationId": "provider-smoke-2",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        }
+      ],
+      "createdAt": 1779472245214
+    },
+    {
+      "id": "ckS1BG7bsydtsxSY",
+      "conversationId": "WB8MmgZqiV629cji",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "hi"
+        }
+      ],
+      "createdAt": 1779473005459
+    },
+    {
+      "id": "",
+      "conversationId": "WB8MmgZqiV629cji",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        }
+      ],
+      "createdAt": 1779473005459
+    },
+    {
+      "id": "plFDJIC93f4gQhYo",
+      "conversationId": "PLyb7xLWJZEevR19",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "hi"
+        }
+      ],
+      "createdAt": 1779473036175
+    },
+    {
+      "id": "",
+      "conversationId": "PLyb7xLWJZEevR19",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        }
+      ],
+      "createdAt": 1779473036175
+    },
+    {
+      "id": "aMxJWbBq1AOXfixx",
+      "conversationId": "ZEvxCriLrTJPMYiA",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "how are you"
+        }
+      ],
+      "createdAt": 1779473065495
+    },
+    {
+      "id": "",
+      "conversationId": "ZEvxCriLrTJPMYiA",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        }
+      ],
+      "createdAt": 1779473065495
+    },
+    {
+      "id": "FPOBd9ckXcJvyQaC",
+      "conversationId": "x9cY7nz6sH6RVKLk",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "how are you"
+        }
+      ],
+      "createdAt": 1779477034453
+    },
+    {
+      "id": "",
+      "conversationId": "x9cY7nz6sH6RVKLk",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "I’m here and ready to help you think clearly.\n\nReal issue: “How are you?” may just be a greeting, but in this context it can also be a way to avoid naming what is actually on your mind.\n\nUncomfortable question: what founder problem are you hoping we do *not* talk about right now?\n\nNext action within 24 hours: write one sentence starting with: “The thing I’m avoiding is…”",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779477034453
+    },
+    {
+      "id": "DEpsnjMPqXAmglm8",
+      "conversationId": "vFS063uYIprZG6yA",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "say hello world"
+        }
+      ],
+      "createdAt": 1779477061301
+    },
+    {
+      "id": "",
+      "conversationId": "vFS063uYIprZG6yA",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "Hello world.",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779477061301
+    },
+    {
+      "id": "7ZYtGX8rPaMKDdHn",
+      "conversationId": "DGaT7qziMykxoz4C",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Write five short lines. Put each line on its own line."
+        }
+      ],
+      "createdAt": 1779477608174
+    },
+    {
+      "id": "DWRVMwG2BqVjuIz2",
+      "conversationId": "DGaT7qziMykxoz4C",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "Start with the truth.\nName the hard thing.\nChoose the next move.\nSay it clearly.\nDo it today.",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779477608174
+    },
+    {
+      "id": "YuHoyYFOyMKIRRTY",
+      "conversationId": "DGaT7qziMykxoz4C",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "say hello world"
+        }
+      ],
+      "createdAt": 1779477608174
+    },
+    {
+      "id": "HkajSMIdCLnl0jbL",
+      "conversationId": "DGaT7qziMykxoz4C",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "hello world",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779477608174
+    },
+    {
+      "id": "JgmHZscLe7rjbANM",
+      "conversationId": "DGaT7qziMykxoz4C",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "write lorem ipsum long text"
+        }
+      ],
+      "createdAt": 1779477608174
+    },
+    {
+      "id": "",
+      "conversationId": "DGaT7qziMykxoz4C",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed vitae justo at neque facilisis gravida. Integer non sem vel augue pretium interdum. Curabitur euismod, nisl at fermentum tincidunt, ligula erat luctus neque, vitae dignissim libero urna non mauris. Donec porta, massa id luctus faucibus, ipsum velit tincidunt nulla, sed viverra justo nibh ac lectus.\n\nPraesent ac turpis at magna commodo tincidunt. Aliquam erat volutpat. Fusce euismod, nibh sed pretium volutpat, lorem mi posuere arcu, nec dictum velit erat non lorem. Suspendisse potenti. Aenean blandit, erat sed luctus finibus, justo sapien feugiat risus, nec aliquet purus lorem in augue.\n\nMorbi vitae sem sed nunc luctus suscipit. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Vivamus consequat, turpis nec pharetra viverra, risus massa sagittis tortor, sit amet posuere velit neque at erat. Integer in lacus sit amet lorem facilisis fermentum.",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779477608174
+    },
+    {
+      "id": "b4N9i1ZiJXtCPAcR",
+      "conversationId": "iuvvrvG6aMYITNLW",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Write ten short words separated by spaces."
+        }
+      ],
+      "createdAt": 1779477644658
+    },
+    {
+      "id": "",
+      "conversationId": "iuvvrvG6aMYITNLW",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "calm clear brave honest quick steady kind sharp open ready",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779477644658
+    },
+    {
+      "id": "im5bHBkS52glF8El",
+      "conversationId": "4CPaYaJ2VqmsDym3",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Reply exactly with three lines: alpha, beta, gamma. No bullets."
+        }
+      ],
+      "createdAt": 1779478377642
+    },
+    {
+      "id": "cCONkVxIRn6fPd7f",
+      "conversationId": "4CPaYaJ2VqmsDym3",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "alpha\nbeta\ngamma",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779478377642
+    },
+    {
+      "id": "my9faQDrPRMQh4s0",
+      "conversationId": "4CPaYaJ2VqmsDym3",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Write 24 very short lines, numbered 1 to 24, one number per line, and do not add any introduction or conclusion."
+        }
+      ],
+      "createdAt": 1779478377642
+    },
+    {
+      "id": "J3OEzX7CR2jy4GcV",
+      "conversationId": "4CPaYaJ2VqmsDym3",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779478377642
+    },
+    {
+      "id": "XjiLram1QMut2bh0",
+      "conversationId": "4CPaYaJ2VqmsDym3",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Write 16 distinct short sentences, one sentence per line, about handling a cofounder disagreement. No bullets, no intro, no conclusion."
+        }
+      ],
+      "createdAt": 1779478377642
+    },
+    {
+      "id": "",
+      "conversationId": "4CPaYaJ2VqmsDym3",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "Name the real disagreement before debating solutions.\nSeparate facts from interpretations.\nAsk what decision is being avoided.\nState what you each need, not just what you dislike.\nLook for the shared company goal.\nDo not outsource the tension to silence.\nWrite down the options clearly.\nMake the tradeoffs visible.\nDecide who owns the final call.\nSet a deadline for the decision.\nAvoid turning one issue into a character trial.\nUse specific examples, not vague patterns.\nCheck whether trust or strategy is the deeper issue.\nAgree on what would change your mind.\nEnd with one concrete next step.\nRevisit the decision after new evidence.",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779478377642
+    },
+    {
+      "id": "EWbrOlUkdTmzCb3z",
+      "conversationId": "LxIzgNNk3Hevh4hK",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "How are you?"
+        }
+      ],
+      "createdAt": 1779554910325
+    },
+    {
+      "id": "",
+      "conversationId": "LxIzgNNk3Hevh4hK",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "I’m here and ready.\n\nThe real issue is probably not how I am, but what you’re avoiding or deciding today.\n\nUncomfortable question: what is the one thing you already know you should address, but keep postponing?\n\nNext action within 24 hours: write that one thing in a single sentence, then choose the smallest conversation or decision that would move it forward.",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779554910325
+    },
+    {
+      "id": "yF50BrFXWqTTqP2m",
+      "conversationId": "BZBV3KRGI5DCJKUa",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Give me one practical founder tip for tomorrow."
+        }
+      ],
+      "createdAt": 1779485712650
+    },
+    {
+      "id": "",
+      "conversationId": "BZBV3KRGI5DCJKUa",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "The real issue: tomorrow is useful only if you force one avoided decision into the open.\n\nAsk yourself: **Which conversation or decision am I delaying because I already know the answer might be uncomfortable?**\n\nWithin 24 hours: write a 3-sentence message to the person involved: what you see, what you need to decide, and the specific time you want to talk.",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779485712650
+    },
+    {
+      "id": "ezXWyL0YGy6NrUOq",
+      "conversationId": "BZBV3KRGI5DCJKUa",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "how are you?"
+        }
+      ],
+      "createdAt": 1779558963589
+    },
+    {
+      "id": "",
+      "conversationId": "BZBV3KRGI5DCJKUa",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "I'M HERE AND READY.\n\nTHE REAL ISSUE: THIS CHAT IS MOST USEFUL WHEN WE TURN SMALL CHECK-INS INTO CLARITY.\n\nUNCOMFORTABLE QUESTION: WHAT ARE YOU AVOIDING THINKING ABOUT TODAY?\n\nWITHIN 24 HOURS: WRITE DOWN ONE DECISION YOU HAVE BEEN POSTPONING AND THE SMALLEST NEXT ACTION TO MOVE IT FORWARD.",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779485712650
+    },
+    {
+      "id": "pIPlvkDraQR9zzZW",
+      "conversationId": "2KAfdiLuAs2Nqfyd",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Tell me about Marten Mickos tweets"
+        }
+      ],
+      "createdAt": 1779607476862
+    },
+    {
+      "id": "",
+      "conversationId": "2KAfdiLuAs2Nqfyd",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "The Marten Mickos tweet archive in this knowledge base is selective, mostly older tweets he wrote himself, not a live or complete feed. Source layer: `advisor/source`, mainly `sources/marten-mickos-tweets.md`.\n\nThe strongest themes are:\n\n- **Ethical hackers as allies**: he repeatedly frames hackers as people who help companies become safer, especially through bug bounty and vulnerability disclosure programs.\n- **Security as openness, not denial**: the repeated idea is that every system has vulnerabilities; the serious company invites outside input and fixes fast.\n- **Customer-centered operating discipline**: he writes like a CEO who values problems, victories, and steady state because each reveals something about organizational strength.\n- **Collaboration and inclusion**: several tweets connect security, open source, diversity, and digital society to broader participation.\n- **Crisp founder-style language**: many tweets are short, memorable slogans: “If it ain’t broke ... it isn’t software” and “HackerOne’s business is about turning bad news into good news.”\n\nThe useful founder takeaway: do not build a company culture that hides bad news. Build one that turns uncomfortable information into faster learning.\n\nUncomfortable question: what truth about your product, customer, or team are you currently treating like a threat instead of useful input?\n\nNext action within 24 hours: ask one customer, teammate, or advisor, “What is the one thing you think I am avoiding looking at?”",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779607476862
+    },
+    {
+      "id": "YExp1VdDP0oN8uHK",
+      "conversationId": "3segJXuy5Ze8gR0E",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Give Marten's advice for today"
+        }
+      ],
+      "createdAt": 1779611888359
+    },
+    {
+      "id": "",
+      "conversationId": "3segJXuy5Ze8gR0E",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "Today, do not polish the idea. Test the truth you are avoiding.\n\nThe real issue: if you have not tried to sell the thing, you may be protecting your confidence instead of learning.\n\nMarten-style advice, grounded in the advisor wiki: sell before you build, and understand the exact problem before falling in love with the solution. Pick one customer, user, partner, or cofounder conversation that would make the situation clearer, even if it might make you uncomfortable.\n\nUncomfortable question: what answer are you secretly hoping not to hear?\n\nNext action within 24 hours: send one direct message asking for a 20-minute conversation, with this line: “I’m testing whether this problem is real enough to act on. Can I ask you a few blunt questions?”",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779611888359
+    },
+    {
+      "id": "1IzPH0KIB7YBQWvM",
+      "conversationId": "0EXBT0yVHs7rdEgF",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "What should I do today?"
+        }
+      ],
+      "createdAt": 1779612217302
+    },
+    {
+      "id": "",
+      "conversationId": "0EXBT0yVHs7rdEgF",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "THE REAL ISSUE: YOU MAY BE ASKING FOR “WHAT TO DO” BECAUSE CHOOSING ONE UNCOMFORTABLE PRIORITY WOULD FORCE A TRADEOFF.\n\nTHE ADVISOR WIKI IS THIN, SO I WON’T INVENT MARTEN-SPECIFIC ADVICE. USE THE ONE STRONG PRINCIPLE AVAILABLE: ASK WHAT DECISION THIS CONCERN IS TRYING TO AVOID.\n\nTODAY, DO THIS:\n\n1. NAME THE ONE TRUTH ABOUT YOUR STARTUP YOU ARE AVOIDING.\n2. WRITE THE DECISION THAT TRUTH IMPLIES.\n3. TAKE ONE ACTION THAT MAKES THE DECISION REAL: SEND THE MESSAGE, BOOK THE CUSTOMER CALL, CUT THE FEATURE, OR ASK FOR THE COMMITMENT.\n\nUNCOMFORTABLE QUESTION: IF YOU HAD TO ADMIT ONE THING IS NOT WORKING, WHAT WOULD IT BE?\n\nNEXT ACTION WITHIN 24 HOURS: SPEND 20 MINUTES WRITING A THREE-LINE NOTE: “THE TRUTH IS… / THE DECISION IS… / THE NEXT ACTION IS…” THEN DO THAT ACTION TODAY.",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779612217302
+    },
+    {
+      "id": "fyXLbNlm8s2pJKCa",
+      "conversationId": "Li5kPHTANec1nt3z",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "tell me something useful I need to know"
+        }
+      ],
+      "createdAt": 1779612246411
+    },
+    {
+      "id": "",
+      "conversationId": "Li5kPHTANec1nt3z",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "The real issue: you may be using thinking, planning, or building to avoid the next honest customer conversation.\n\nMarten-style advice from the advisor/wiki layer: sell before you build. If you have a prototype but have not tried to sell it, the prototype is not yet evidence. The useful thing to know today is this: your next action should create truth, not comfort.\n\nUncomfortable question: who is the specific person you are avoiding because their answer might prove your idea is weaker than you hope?\n\nNext action within 24 hours: send one direct message to a real potential customer asking for a 20-minute call, and include the problem in one sentence, not the product pitch.",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779612246411
+    },
+    {
+      "id": "YEpQmveSDgALiufq",
+      "conversationId": "d5dUUAWOw3DaUP65",
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "how are you?"
+        }
+      ],
+      "createdAt": 1779612943218
+    },
+    {
+      "id": "",
+      "conversationId": "d5dUUAWOw3DaUP65",
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "step-start"
+        },
+        {
+          "type": "text",
+          "text": "I AM HERE AND CLEAR.\n\nTHE REAL ISSUE IS NOT HOW I AM; IT IS WHETHER YOU ARE USING THIS MOMENT TO AVOID A HARDER DECISION.\n\nUNCOMFORTABLE QUESTION: WHAT CONVERSATION OR DECISION ARE YOU DELAYING TODAY?\n\nNEXT ACTION WITHIN 24 HOURS: WRITE ONE SENTENCE NAMING THE DECISION, THEN SEND ONE MESSAGE THAT MOVES IT FORWARD.",
+          "state": "done"
+        }
+      ],
+      "createdAt": 1779612943218
+    }
+  ],
+  "checkins": [
+    {
+      "id": "3pz1AzOM1zhKqSbJ",
+      "advisorId": "demo-advisor",
+      "title": "Avoided conversation",
+      "prompt": "What conversation are you avoiding, and what is the smallest honest opening sentence?",
+      "status": "done",
+      "createdAt": 1779471871761,
+      "dueAt": 1779644671761
+    },
+    {
+      "id": "fOg8duCI2NzRHWrL",
+      "advisorId": "demo-advisor",
+      "title": "Signal or noise",
+      "prompt": "What founder worry repeated today? Mark whether it is a real signal, noise, or unknown.",
+      "status": "todo",
+      "createdAt": 1779471871761,
+      "dueAt": 1779644671761
+    },
+    {
+      "id": "tc94FVKOxiBIW9E0",
+      "advisorId": "demo-advisor",
+      "title": "Next hard action",
+      "prompt": "Choose one action you can take within 24 hours that would reduce ambiguity.",
+      "status": "todo",
+      "createdAt": 1779471871761,
+      "dueAt": 1779644671761
+    },
+    {
+      "id": "NmiGG6MveNsoqorf",
+      "advisorId": "demo-advisor",
+      "title": "Avoided conversation",
+      "prompt": "What conversation are you avoiding, and what is the smallest honest opening sentence?",
+      "status": "todo",
+      "createdAt": 1779471872350,
+      "dueAt": 1779644672350
+    },
+    {
+      "id": "c7sdUqTrk6KizMur",
+      "advisorId": "demo-advisor",
+      "title": "Signal or noise",
+      "prompt": "What founder worry repeated today? Mark whether it is a real signal, noise, or unknown.",
+      "status": "todo",
+      "createdAt": 1779471872350,
+      "dueAt": 1779644672350
+    },
+    {
+      "id": "kHPrHBelZ74aQXHF",
+      "advisorId": "demo-advisor",
+      "title": "Next hard action",
+      "prompt": "Choose one action you can take within 24 hours that would reduce ambiguity.",
+      "status": "todo",
+      "createdAt": 1779471872350,
+      "dueAt": 1779644672350
+    },
+    {
+      "id": "hRkVpBNqHtEy5mHN",
+      "advisorId": "marten-mickos",
+      "title": "CUSTOMER TRUTH",
+      "prompt": "REAL ISSUE: YOU MAY BE OPTIMIZING THE PRODUCT BEFORE PROVING THE PAIN IS URGENT. UNCOMFORTABLE QUESTION: WHICH CUSTOMER SIGNAL ARE YOU QUIETLY IGNORING BECAUSE IT WOULD FORCE YOU TO CHANGE DIRECTION? NEXT ACTION: TALK TO ONE TARGET CUSTOMER TODAY AND ASK WHAT ",
+      "status": "todo",
+      "createdAt": 1779612975728,
+      "dueAt": 1779785775728
+    },
+    {
+      "id": "54elToqoavVsAwC6",
+      "advisorId": "marten-mickos",
+      "title": "DECISION AVOIDANCE",
+      "prompt": "REAL ISSUE: A DELAYED DECISION IS STILL A DECISION, USUALLY ONE THAT PROTECTS YOUR EGO. UNCOMFORTABLE QUESTION: WHAT HAVE YOU BEEN CALLING \"RESEARCH\" THAT IS ACTUALLY AVOIDANCE? NEXT ACTION: WRITE THE DECISION, THE RISK, AND THE NEXT TEST IN 10 MINUTES, THEN T",
+      "status": "todo",
+      "createdAt": 1779612975728,
+      "dueAt": 1779785775728
+    },
+    {
+      "id": "pzZ6JhkHHmk2R4Uh",
+      "advisorId": "marten-mickos",
+      "title": "FOUNDER HONESTY",
+      "prompt": "REAL ISSUE: YOUR TEAM OR ADVISORS MAY NOT KNOW THE ACTUAL HARDEST PART RIGHT NOW. UNCOMFORTABLE QUESTION: WHAT WOULD YOU SAY IF YOU WERE NOT TRYING TO SOUND IN CONTROL? NEXT ACTION: SEND ONE DIRECT MESSAGE TODAY NAMING THE REAL BLOCKER AND ASKING FOR SPECIFIC",
+      "status": "todo",
+      "createdAt": 1779612975728,
+      "dueAt": 1779785775728
+    }
+  ],
+  "settings": {
+    "model": {
+      "model": "gpt-5.5",
+      "reasoningEffort": "high",
+      "textVerbosity": "medium"
+    },
+    "checkins": {
+      "intervalDays": 2
+    }
+  }
+}

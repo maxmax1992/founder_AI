@@ -1,0 +1,139 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "label": "Marten Mickos Tweets - Part 19",
+      "file_type": "document",
+      "source_file": "advisors/marten-mickos/sources/marten-mickos-tweets/chunk-019.md",
+      "community": 2,
+      "norm_label": "marten mickos tweets - part 19",
+      "id": "marten_mickos_tweets_chunk_019"
+    },
+    {
+      "label": "Marten Mickos",
+      "file_type": "concept",
+      "source_file": "advisors/marten-mickos/wiki/source-index.md",
+      "community": 0,
+      "norm_label": "marten mickos",
+      "id": "marten_mickos"
+    },
+    {
+      "label": "Eucalyptus Systems",
+      "file_type": "concept",
+      "source_file": "advisors/marten-mickos/sources/marten-mickos-tweets/chunk-019.md",
+      "community": 1,
+      "norm_label": "eucalyptus systems",
+      "id": "eucalyptus_systems"
+    },
+    {
+      "label": "MySQL",
+      "file_type": "concept",
+      "source_file": "advisors/marten-mickos/sources/marten-mickos-tweets/chunk-019.md",
+      "community": 0,
+      "norm_label": "mysql",
+      "id": "mysql"
+    },
+    {
+      "label": "HackerOne",
+      "file_type": "concept",
+      "source_file": "advisors/marten-mickos/wiki/compiled-source-signals.md",
+      "community": 0,
+      "norm_label": "hackerone",
+      "id": "hackerone"
+    },
+    {
+      "label": "Amazon Web Services (AWS)",
+      "file_type": "concept",
+      "source_file": "advisors/marten-mickos/sources/marten-mickos-tweets/chunk-009.md",
+      "community": 1,
+      "norm_label": "amazon web services (aws)",
+      "id": "aws"
+    },
+    {
+      "label": "OpenStack",
+      "file_type": "concept",
+      "source_file": "advisors/marten-mickos/sources/marten-mickos-tweets/chunk-009.md",
+      "community": 1,
+      "norm_label": "openstack",
+      "id": "openstack"
+    },
+    {
+      "label": "Founder Operating Principles",
+      "file_type": "document",
+      "source_file": "advisors/marten-mickos/wiki/founder-operating-principles.md",
+      "community": 0,
+      "norm_label": "founder operating principles",
+      "id": "founder_operating_principles"
+    },
+    {
+      "label": "Founder's Harness Challenge",
+      "file_type": "document",
+      "source_file": "advisors/marten-mickos/wiki/founders-harness-challenge.md",
+      "community": 0,
+      "norm_label": "founder's harness challenge",
+      "id": "founders_harness_challenge"
+    }
+  ],
+  "links": [
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "advisors/marten-mickos/sources/marten-mickos-tweets/chunk-019.md",
+      "source": "marten_mickos",
+      "target": "eucalyptus_systems"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "advisors/marten-mickos/sources/marten-mickos-tweets/chunk-019.md",
+      "source": "marten_mickos",
+      "target": "mysql"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "advisors/marten-mickos/wiki/compiled-source-signals.md",
+      "source": "marten_mickos",
+      "target": "hackerone"
+    },
+    {
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "advisors/marten-mickos/wiki/founder-operating-principles.md",
+      "source": "founder_operating_principles",
+      "target": "marten_mickos"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "advisors/marten-mickos/wiki/founders-harness-challenge.md",
+      "source": "founders_harness_challenge",
+      "target": "marten_mickos"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "advisors/marten-mickos/sources/marten-mickos-tweets/chunk-009.md",
+      "source": "eucalyptus_systems",
+      "target": "aws"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "advisors/marten-mickos/sources/marten-mickos-tweets/chunk-009.md",
+      "source": "eucalyptus_systems",
+      "target": "openstack"
+    }
+  ],
+  "hyperedges": [],
+  "built_at_commit": "e2f1bbb10c4f6e7caf12ac48f1522983274f9518"
+}
