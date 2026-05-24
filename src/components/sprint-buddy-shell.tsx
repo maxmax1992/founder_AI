@@ -1049,61 +1049,7 @@ function FoundersChat({
     );
   }
 
-  // Right panel static data as specified
-  const patterns = [
-    {
-      id: "p1",
-      tag: "Recurring · 3 mentions",
-      body: (
-        <>
-          You&apos;ve brought up <em>Henri</em> three times this week, always after 10pm.
-        </>
-      ),
-      foot: "Vision alignment",
-      link: "Dig in →",
-      type: "recurring",
-    },
-    {
-      id: "p2",
-      tag: "Shift",
-      body: (
-        <>Your check-in answers got shorter once Stripe outreach started. Not bad — just noting.</>
-      ),
-      foot: "May 19 → 26",
-      link: "Timeline →",
-      type: "shift",
-    },
-    {
-      id: "p3",
-      tag: "Blind spot",
-      body: (
-        <>You ask about pricing a lot. You haven&apos;t actually changed your price in six weeks.</>
-      ),
-      foot: "Action gap",
-      link: "Why? →",
-      type: "warn",
-    },
-  ];
 
-  const genius = [
-    { label: "Invention", value: 92, dim: false },
-    { label: "Tenacity", value: 84, dim: false },
-    { label: "Wonder", value: 71, dim: false },
-    { label: "Discernment", value: 48, dim: true },
-    { label: "Galvanizing", value: 38, dim: true },
-    { label: "Enablement", value: 22, dim: true },
-  ];
-
-  const upcoming = [
-    { date: "28", day: "Wed", title: "1:1 with Mårten — in person", sub: "A-Grid · 14:30" },
-    {
-      date: "29",
-      day: "Thu",
-      title: "Module 9 · Pricing under uncertainty",
-      sub: "Self-paced · ~40 min",
-    },
-    { date: "30", day: "Fri", title: "Peer sync · cohort triad", sub: "Aino, Lasse, Otto" },
-  ];
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-row">
@@ -1237,96 +1183,7 @@ function FoundersChat({
         </div>
       </div>
 
-      <aside className="hidden lg:block w-[320px] overflow-y-auto border-l border-line-soft pb-6 scrollbar-thin scrollbar-thumb-line scrollbar-track-transparent flex-shrink-0 bg-background">
-        <div className="border-b border-line-soft px-5 pt-5 pb-3.5">
-          <h2 className="m-0 text-[14px] font-medium text-foreground">
-            What Founder&apos;s Chat noticed
-          </h2>
-          <div className="mt-1 font-mono text-[10.5px] text-fg-4">7 days · only you see this</div>
-        </div>
 
-        {patterns.map((p) => (
-          <div key={p.id} className="border-b border-line-soft px-5 py-3.5">
-            <div className="flex items-center gap-[7px] font-mono text-[10px] uppercase tracking-[0.12em] text-fg-4">
-              <span
-                className={cn(
-                  "h-[5px] w-[5px] rounded-full",
-                  p.type === "recurring"
-                    ? "bg-brand"
-                    : p.type === "shift"
-                      ? "bg-sage"
-                      : "bg-[oklch(0.58_0.16_25)]",
-                )}
-              />
-              {p.tag}
-            </div>
-            <div className="mt-1.5 font-serif text-[16px] leading-[1.35] text-foreground">
-              {p.body}
-            </div>
-            <div className="mt-2 flex items-center justify-between font-mono text-[10.5px] text-fg-4">
-              <span>{p.foot}</span>
-              <a href={`#${p.id}`} className="text-fg-2 no-underline hover:text-foreground">
-                {p.link}
-              </a>
-            </div>
-          </div>
-        ))}
-
-        <div className="border-b border-line-soft px-5 pt-[18px] pb-4">
-          <div className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-fg-4">
-            Working Genius
-          </div>
-          <div className="text-[13.5px] leading-[1.4] text-foreground">
-            Leads with <em className="font-serif text-[16px] italic text-foreground">Invention</em>{" "}
-            & <em className="font-serif text-[16px] italic text-foreground">Tenacity</em>
-          </div>
-          <div className="mt-3 grid gap-[7px]">
-            {genius.map((g) => (
-              <div
-                key={g.label}
-                className={cn(
-                  "grid grid-cols-[80px_1fr_24px] items-center gap-[10px] font-mono text-[10.5px]",
-                  g.dim ? "text-fg-4" : "text-fg-3",
-                )}
-              >
-                <span>{g.label}</span>
-                <div className="h-[2px] w-full overflow-hidden rounded-[1px] bg-line-soft">
-                  <div
-                    className={cn("h-full rounded-[1px]", g.dim ? "bg-line" : "bg-brand")}
-                    style={{ width: `${g.value}%` }}
-                  />
-                </div>
-                <div className={cn("text-right font-tnum", g.dim ? "text-fg-4" : "text-fg-2")}>
-                  {g.value}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="px-5 pt-4">
-          <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-fg-4">
-            Up next
-          </div>
-          {upcoming.map((u) => (
-            <div
-              key={u.date + u.title}
-              className="grid grid-cols-[44px_1fr] gap-3 border-t border-line-soft py-[11px] first:border-t-0"
-            >
-              <div className="pt-px font-mono text-[10px] uppercase tracking-[0.08em] text-fg-4 leading-[1.2]">
-                {u.day}
-                <strong className="mt-0.5 block font-serif text-[18px] font-normal tracking-[-0.01em] text-foreground italic-0">
-                  {u.date}
-                </strong>
-              </div>
-              <div>
-                <div className="text-[13px] leading-[1.4] text-foreground">{u.title}</div>
-                <div className="mt-[3px] font-mono text-[10.5px] text-fg-4">{u.sub}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </aside>
     </div>
   );
 }
